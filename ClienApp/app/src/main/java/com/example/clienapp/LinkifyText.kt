@@ -2,11 +2,14 @@ package com.example.clienapp
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,9 +19,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import coil.compose.AsyncImage
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 
 @Composable
 fun LinkifyText(
@@ -125,26 +130,44 @@ fun extractYouTubeVideoId(url: String): String? {
 @Composable
 fun YouTubePreview(url: String) {
     val videoId = extractYouTubeVideoId(url) ?: return
+    val context = LocalContext.current
     
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp),
+            .height(180.dp)
+            .clickable {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+                context.startActivity(intent)
+            },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.fillMaxSize()
         ) {
-            AndroidView(
-                factory = { context ->
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        webViewClient = WebViewClient()
-                        loadUrl("https://www.youtube.com/embed/$videoId")
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
+            // YouTube 썸네일 이미지
+            AsyncImage(
+                model = "https://img.youtube.com/vi/$videoId/hqdefault.jpg",
+                contentDescription = "YouTube 비디오 썸네일",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
+            // 재생 버튼 오버레이
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f))
+            )
+            
+            // 재생 아이콘
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = "재생",
+                modifier = Modifier
+                    .size(60.dp)
+                    .align(Alignment.Center),
+                tint = Color.White
             )
         }
     }

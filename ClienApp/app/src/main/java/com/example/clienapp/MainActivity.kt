@@ -1,5 +1,7 @@
 package com.example.clienapp
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -26,6 +29,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import androidx.navigation.compose.composable
@@ -846,54 +851,61 @@ fun PostDetailScreen(navController: NavController, postUrl: String, postTitle: S
                 if (postDetail!!.youtubeVideoIds.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
                     postDetail!!.youtubeVideoIds.forEach { videoId ->
+                        val context = LocalContext.current
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp)
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 8.dp)
+                                .clickable {
+                                    // YouTube 앱 또는 브라우저로 열기
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+                                    context.startActivity(intent)
+                                },
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
+                                modifier = Modifier.fillMaxSize()
                             ) {
-                                AndroidView(
-                                    factory = { context ->
-                                        WebView(context).apply {
-                                            settings.apply {
-                                                javaScriptEnabled = true
-                                                domStorageEnabled = true
-                                                loadWithOverviewMode = true
-                                                useWideViewPort = true
-                                                mediaPlaybackRequiresUserGesture = false
-                                                allowFileAccess = true
-                                                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                            }
-                                            webViewClient = WebViewClient()
-                                            webChromeClient = android.webkit.WebChromeClient()
-                                            
-                                            val embedHtml = """
-                                                <html>
-                                                <head>
-                                                    <style>
-                                                        body { margin: 0; padding: 0; }
-                                                        iframe { width: 100%; height: 100%; border: none; }
-                                                    </style>
-                                                </head>
-                                                <body>
-                                                    <iframe src="https://www.youtube.com/embed/$videoId" 
-                                                            frameborder="0" 
-                                                            allowfullscreen
-                                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
-                                                    </iframe>
-                                                </body>
-                                                </html>
-                                            """.trimIndent()
-                                            
-                                            loadDataWithBaseURL(null, embedHtml, "text/html", "UTF-8", null)
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxSize()
+                                // YouTube 썸네일 이미지
+                                AsyncImage(
+                                    model = "https://img.youtube.com/vi/$videoId/hqdefault.jpg",
+                                    contentDescription = "YouTube 비디오 썸네일",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                
+                                // 재생 버튼 오버레이
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.3f))
+                                )
+                                
+                                // 재생 아이콘
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = "재생",
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .align(Alignment.Center),
+                                    tint = Color.White
+                                )
+                                
+                                // YouTube 로고
+                                Text(
+                                    text = "YouTube",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .background(
+                                            color = Color.Red,
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .align(Alignment.TopEnd)
+                                        .padding(8.dp)
                                 )
                             }
                         }
@@ -993,15 +1005,15 @@ fun MenuItemCard(item: MenuItem, onClick: () -> Unit) {
         ) {
             Text(
                 text = item.title,
-                style = MaterialTheme.typography.titleMedium,  // headlineSmall에서 titleMedium으로 축소
-                fontSize = 14.sp  // 명시적 크기 지정
+                style = MaterialTheme.typography.titleLarge,  // titleMedium에서 titleLarge로 증가
+                fontSize = 18.sp  // 14sp에서 18sp로 (약 30% 증가)
             )
             if (item.description.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))  // 4dp에서 2dp로 축소
+                Spacer(modifier = Modifier.height(3.dp))  // 2dp에서 3dp로 증가
                 Text(
                     text = item.description,
-                    style = MaterialTheme.typography.bodySmall,  // bodyMedium에서 bodySmall로 축소
-                    fontSize = 12.sp  // 명시적 크기 지정
+                    style = MaterialTheme.typography.bodyMedium,  // bodySmall에서 bodyMedium으로 증가
+                    fontSize = 15.sp  // 12sp에서 15sp로 (약 25% 증가)
                 )
             }
         }
