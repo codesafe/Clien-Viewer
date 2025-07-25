@@ -39,79 +39,107 @@ fun LinkifyText(
         "(https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=]+)"
     )
     
-    val annotatedString = buildAnnotatedString {
-        var lastIndex = 0
+    // 텍스트를 URL과 일반 텍스트로 분리
+    val parts = mutableListOf<TextPart>()
+    var lastIndex = 0
+    
+    urlPattern.findAll(text).forEach { matchResult ->
+        val url = matchResult.value
+        val startIndex = matchResult.range.first
+        val endIndex = matchResult.range.last + 1
         
-        urlPattern.findAll(text).forEach { matchResult ->
-            val url = matchResult.value
-            val startIndex = matchResult.range.first
-            val endIndex = matchResult.range.last + 1
-            
-            // URL 이전의 일반 텍스트 추가
-            if (startIndex > lastIndex) {
-                append(text.substring(lastIndex, startIndex))
-            }
-            
-            // URL 추가 with annotation
-            pushStringAnnotation(tag = "URL", annotation = url)
-            pushStyle(
-                SpanStyle(
-                    color = MaterialTheme.colorScheme.primary,
-                    textDecoration = TextDecoration.Underline
-                )
-            )
-            append(url)
-            pop()
-            pop()
-            
-            lastIndex = endIndex
+        // URL 이전의 일반 텍스트 추가
+        if (startIndex > lastIndex) {
+            parts.add(TextPart.Text(text.substring(lastIndex, startIndex)))
         }
         
-        // 마지막 남은 텍스트 추가
-        if (lastIndex < text.length) {
-            append(text.substring(lastIndex))
-        }
+        // URL 추가
+        parts.add(TextPart.Url(url))
+        
+        lastIndex = endIndex
     }
     
+    // 마지막 남은 텍스트 추가
+    if (lastIndex < text.length) {
+        parts.add(TextPart.Text(text.substring(lastIndex)))
+    }
+    
+    // 텍스트와 미리보기를 순서대로 표시
     Column(modifier = modifier) {
-        ClickableText(
-            text = annotatedString,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = fontSize.sp,
-                lineHeight = lineHeight.sp
-            ),
-            onClick = { offset ->
-                annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
-                    .firstOrNull()?.let { annotation ->
-                        val url = annotation.item
-                        
-                        // YouTube URL 체크
-                        if (isYouTubeUrl(url)) {
-                            // YouTube는 별도 처리 (아래에서 미리보기로 표시됨)
-                        } else {
-                            // 일반 URL은 브라우저로 열기
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        parts.forEachIndexed { index, part ->
+            when (part) {
+                is TextPart.Text -> {
+                    if (part.content.isNotEmpty()) {
+                        androidx.compose.material3.Text(
+                            text = part.content,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = fontSize.sp,
+                                lineHeight = lineHeight.sp
+                            )
+                        )
+                    }
+                }
+                is TextPart.Url -> {
+                    // 클릭 가능한 URL 텍스트
+                    ClickableText(
+                        text = buildAnnotatedString {
+                            pushStyle(
+                                SpanStyle(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textDecoration = TextDecoration.Underline
+                                )
+                            )
+                            append(part.url)
+                            pop()
+                        },
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = fontSize.sp,
+                            lineHeight = lineHeight.sp
+                        ),
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(part.url))
                             context.startActivity(intent)
                         }
+                    )
+                    
+                    // URL 미리보기 표시 (바로 아래)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (isYouTubeUrl(part.url)) {
+                        YouTubePreview(url = part.url)
+                    } else if (shouldShowLinkPreview(part.url)) {
+                        LinkPreview(url = part.url)
                     }
+                    
+                    // 다음 요소와의 간격
+                    if (index < parts.size - 1) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
             }
-        )
-        
-        // YouTube 미리보기 표시
-        val youtubeUrls = urlPattern.findAll(text)
-            .map { it.value }
-            .filter { isYouTubeUrl(it) }
-            .toList()
-        
-        youtubeUrls.forEach { youtubeUrl ->
-            Spacer(modifier = Modifier.height(8.dp))
-            YouTubePreview(url = youtubeUrl)
         }
     }
 }
 
+// 텍스트 부분을 나타내는 sealed class
+sealed class TextPart {
+    data class Text(val content: String) : TextPart()
+    data class Url(val url: String) : TextPart()
+}
+
 fun isYouTubeUrl(url: String): Boolean {
     return url.contains("youtube.com/watch") || url.contains("youtu.be/")
+}
+
+fun shouldShowLinkPreview(url: String): Boolean {
+    // 미리보기를 지원할 사이트들 (성능을 위해 제한)
+    val supportedSites = listOf(
+        "naver.com", "daum.net", "google.com", "github.com",
+        "stackoverflow.com", "wikipedia.org", "reddit.com",
+        "twitter.com", "facebook.com", "instagram.com",
+        "news.mt.co.kr", "chosun.com", "donga.com", "joongang.co.kr"
+    )
+    
+    return supportedSites.any { site -> url.contains(site, ignoreCase = true) }
 }
 
 fun extractYouTubeVideoId(url: String): String? {

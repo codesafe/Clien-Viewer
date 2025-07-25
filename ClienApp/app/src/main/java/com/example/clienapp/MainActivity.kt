@@ -45,12 +45,13 @@ import org.jsoup.Jsoup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.util.Log
-import androidx.compose.foundation.Image
+import okhttp3.Request
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import coil.ImageLoader
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.LocalImageLoader
+import androidx.compose.runtime.CompositionLocalProvider
 
 data class MenuItem(
     val title: String,
@@ -71,7 +72,8 @@ data class Comment(
     val author: String,
     val content: String,
     val date: String,
-    val isReply: Boolean = false
+    val isReply: Boolean = false,
+    val images: List<String> = emptyList()
 )
 
 data class PostDetail(
@@ -83,13 +85,15 @@ data class PostDetail(
     val author: String = "",
     val date: String = "",
     val views: String = "",
-    val comments: List<Comment> = emptyList()
+    val comments: List<Comment> = emptyList(),
+    val sourceUrl: String = ""
 )
 
 class ClienRepository {
     private val allowedBoards = listOf(
         "모두의공원",
-        "아무거나질문", 
+        //"추천글계시판",
+        "아무거나질문",
         "정보와자료",
         "새로운소식",
         "사고팔고",
@@ -102,7 +106,7 @@ class ClienRepository {
         // 캐시 확인
         val cached = CacheManager.getCachedMenuItems("main_menu")
         if (cached != null) {
-            Log.d("ClienApp", "Using cached menu items")
+            NetworkLogger.logDebug("ClienApp", "Using cached menu items")
             return@withContext cached
         }
         
@@ -110,12 +114,13 @@ class ClienRepository {
             // 하드코딩된 게시판 목록 (실제 URL 패턴에 맞게 수정 필요)
             val menuItems = listOf(
                 MenuItem("모두의공원", "/service/board/park"),
+                //MenuItem("추천글계시판", "/service/service/recommend"),
                 MenuItem("아무거나질문", "/service/board/kin"),
                 MenuItem("정보와자료", "/service/board/lecture"),
                 MenuItem("새로운소식", "/service/board/news"),
                 MenuItem("사고팔고", "/service/board/sold"),
                 MenuItem("알뜰구매", "/service/board/jirum"),
-                MenuItem("회원중고장터", "/service/board/used"),
+                MenuItem("회원중고장터", "/service/board/sold"),
                 MenuItem("강좌/사용기", "/service/board/use")
             )
             
@@ -129,7 +134,7 @@ class ClienRepository {
             menuItems
         } catch (e: Exception) {
             e.printStackTrace()
-            Log.e("ClienApp", "Error fetching menu items: ${e.message}")
+            NetworkLogger.logError("ClienApp", "Error fetching menu items: ${e.message}", e)
             emptyList()
         }
     }
@@ -157,15 +162,17 @@ class ClienRepository {
         
         try {
             val fullUrl = if (pageUrl.startsWith("http")) pageUrl else "https://m.clien.net$pageUrl"
-            Log.d("ClienApp", "Fetching posts from: $fullUrl (page: $page)")
+            NetworkLogger.logDebug("ClienApp", "Fetching posts from: $fullUrl (page: $page)")
             
-            val doc = Jsoup.connect(fullUrl)
-                .userAgent("Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
-                .timeout(10000)
-                .ignoreHttpErrors(true)
-                .ignoreContentType(true)
-                .sslSocketFactory(SSLHelper.getUnsafeOkHttpClient())
-                .get()
+            val client = SSLHelper.getUnsafeOkHttpClient()
+            val request = Request.Builder()
+                .url(fullUrl)
+                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                .build()
+            
+            val response = client.newCall(request).execute()
+            val html = response.body?.string() ?: ""
+            val doc = Jsoup.parse(html, fullUrl)
 
             val posts = mutableListOf<PostItem>()
             
@@ -246,61 +253,93 @@ class ClienRepository {
         
         try {
             val fullUrl = if (postUrl.startsWith("http")) postUrl else "https://m.clien.net$postUrl"
-            Log.d("ClienApp", "Fetching post detail from: $fullUrl")
+            NetworkLogger.logDebug("ClienApp", "Fetching post detail from: $fullUrl")
             
-            val doc = Jsoup.connect(fullUrl)
-                .userAgent("Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
-                .timeout(10000)
-                .ignoreHttpErrors(true)
-                .ignoreContentType(true)
-                .sslSocketFactory(SSLHelper.getUnsafeOkHttpClient())
-                .get()
+            val client = SSLHelper.getUnsafeOkHttpClient()
+            val request = Request.Builder()
+                .url(fullUrl)
+                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                .build()
+            
+            val response = client.newCall(request).execute()
+            val html = response.body?.string() ?: ""
+            val doc = Jsoup.parse(html, fullUrl)
 
             // 디버깅을 위한 HTML 구조 로그
             Log.d("ClienApp", "========== POST DETAIL HTML STRUCTURE ==========")
             Log.d("ClienApp", "HTML Title: ${doc.title()}")
             
-            // 가능한 모든 제목 선택자 시도
-            val titleSelectors = listOf(
-                ".post_title", ".post-title", ".title", "h1.title", "h2.title", 
-                ".view_title", ".subject", ".post_subject"
-            )
+            // 제목 파싱 - doc.xml 구조에 맞게
             var title = ""
-            for (selector in titleSelectors) {
-                val element = doc.select(selector).first()
-                if (element != null) {
-                    title = element.text().trim()
-                    Log.d("ClienApp", "Found title with selector '$selector': $title")
-                    break
+            val titleElement = doc.select(".post_subject span").first()
+            if (titleElement != null) {
+                title = titleElement.text().trim()
+                NetworkLogger.logDebug("ClienApp", "Found title: $title")
+            } else {
+                // 대체 선택자들
+                val titleSelectors = listOf(".post_title", ".post-title", ".title", "h1.title", "h2.title")
+                for (selector in titleSelectors) {
+                    val element = doc.select(selector).first()
+                    if (element != null) {
+                        title = element.text().trim()
+                        NetworkLogger.logDebug("ClienApp", "Found title with fallback selector '$selector': $title")
+                        break
+                    }
                 }
             }
             
-            // 가능한 모든 내용 선택자 시도
-            val contentSelectors = listOf(
-                ".post_content", ".post-content", ".content", ".post_article",
-                ".post_view", ".view_content", "article .content", ".memo_content"
-            )
+            // 글 내용 파싱 - doc.xml 구조에 맞게
             var contentElement: org.jsoup.nodes.Element? = null
-            for (selector in contentSelectors) {
-                val element = doc.select(selector).first()
-                if (element != null) {
-                    contentElement = element
-                    Log.d("ClienApp", "Found content with selector '$selector'")
-                    break
+            contentElement = doc.select(".post_content article").first()
+            if (contentElement != null) {
+                NetworkLogger.logDebug("ClienApp", "Found content with .post_content article")
+            } else {
+                // 대체 선택자들
+                val contentSelectors = listOf(
+                    ".post_content", ".post-content", ".content", ".post_article",
+                    ".post_view", ".view_content", "article .content", ".memo_content"
+                )
+                for (selector in contentSelectors) {
+                    val element = doc.select(selector).first()
+                    if (element != null) {
+                        contentElement = element
+                        NetworkLogger.logDebug("ClienApp", "Found content with fallback selector '$selector'")
+                        break
+                    }
                 }
             }
             
             val content = contentElement?.text()?.trim() ?: ""
             val htmlContent = contentElement?.html() ?: ""
             
-            // 이미지 추출
+            // post_source의 attached_text 찾기 (출처 링크)
+            var sourceUrl = ""
+            val postSourceElement = doc.select(".post_source .attached_text").first()
+            if (postSourceElement != null) {
+                sourceUrl = postSourceElement.text().trim()
+                NetworkLogger.logDebug("ClienApp", "Found source URL: $sourceUrl")
+            }
+            
+            // 이미지 추출 (개선된 로직)
             val images = mutableListOf<String>()
             contentElement?.select("img")?.forEach { img ->
                 val src = img.attr("src")
-                if (src.isNotEmpty()) {
-                    val fullImageUrl = if (src.startsWith("http")) src else "https://m.clien.net$src"
+                val dataSrc = img.attr("data-src") // lazy loading 이미지
+                val actualSrc = when {
+                    src.isNotEmpty() && !src.contains("transparent") && !src.contains("blank") -> src
+                    dataSrc.isNotEmpty() -> dataSrc
+                    else -> ""
+                }
+                
+                if (actualSrc.isNotEmpty()) {
+                    val fullImageUrl = when {
+                        actualSrc.startsWith("http://") || actualSrc.startsWith("https://") -> actualSrc
+                        actualSrc.startsWith("//") -> "https:$actualSrc"
+                        actualSrc.startsWith("/") -> "https://m.clien.net$actualSrc"
+                        else -> "https://m.clien.net/$actualSrc"
+                    }
                     images.add(fullImageUrl)
-                    Log.d("ClienApp", "Found image: $fullImageUrl")
+                    NetworkLogger.logDebug("ClienApp", "Found image: $fullImageUrl")
                 }
             }
             
@@ -329,8 +368,24 @@ class ClienRepository {
                 }
             }
             
-            // 작성자, 날짜, 조회수 파싱
-            val author = doc.select(".post_author, .author, .nickname, .writer, .user_info .nickname").first()?.text()?.trim() ?: ""
+            // 작성자 파싱 - doc.xml 구조에 맞게
+            var author = ""
+            val authorElement = doc.select(".post_view .post_contact .nickname").first()
+            if (authorElement != null) {
+                author = authorElement.text().trim()
+                NetworkLogger.logDebug("ClienApp", "Found author: $author")
+            } else {
+                // 대체 선택자들
+                val authorSelectors = listOf(".post_author", ".author", ".nickname", ".writer", ".user_info .nickname")
+                for (selector in authorSelectors) {
+                    val element = doc.select(selector).first()
+                    if (element != null) {
+                        author = element.text().trim()
+                        NetworkLogger.logDebug("ClienApp", "Found author with fallback selector '$selector': $author")
+                        break
+                    }
+                }
+            }
             val date = doc.select(".post_date, .date, .time, .post_time").first()?.text()?.trim() ?: ""
             val views = doc.select(".post_view, .hit, .view, .view_count").first()?.text()?.trim() ?: ""
             
@@ -342,115 +397,147 @@ class ClienRepository {
             Log.d("ClienApp", "Date: $date")
             Log.d("ClienApp", "Views: $views")
             
-            // 댓글 파싱
+            // 댓글 파싱 - 완전히 재구성
             val comments = mutableListOf<Comment>()
             val processedComments = mutableSetOf<String>() // 중복 방지를 위한 Set
             
-            // 디버깅을 위해 전체 HTML 구조 확인
-            Log.d("ClienApp", "========== COMMENT AREA DEBUG ==========")
-            val allNicknames = doc.select("span.nickname")
-            Log.d("ClienApp", "Total nicknames found in document: ${allNicknames.size}")
+            NetworkLogger.logDebug("ClienApp", "========== COMMENT PARSING START ==========")
             
-            // 모든 댓글 관련 요소 찾기 - 더 넓은 범위로
-            val commentElements = doc.select("li:has(span.nickname), div:has(span.nickname), tr:has(span.nickname)")
-            Log.d("ClienApp", "Found ${commentElements.size} potential comment elements")
-            
-            // 가장 작은 댓글 컨테이너만 선택 (중첩된 요소 제외)
-            val filteredElements = commentElements.filter { element ->
-                // 현재 요소 내부에 다른 nickname을 가진 자식 댓글 요소가 있는지 확인
-                val innerNicknames = element.select("span.nickname")
-                //val hasNestedComments = innerNicknames.size > 1
-                val hasNestedComments = false
+            // 전체 댓글 영역 확인
+            val commentArea = doc.select(".post_comment, #comment-div, .comment_area").first()
+            if (commentArea != null) {
+                NetworkLogger.logDebug("ClienApp", "Found comment area")
+                
+                // 모든 댓글 관련 요소 찾기 (더 포괄적인 선택자)
+                val allCommentElements = commentArea.select(
+                    ".comment, .comment_row, " +
+                    "[data-role='comment'], [data-role='comment-row'], " +
+                    "li:has(.nickname), div:has(.nickname)"
+                )
+                
+                NetworkLogger.logDebug("ClienApp", "Found ${allCommentElements.size} potential comment elements")
+                
+                allCommentElements.forEach { element ->
+                    try {
+                        // 대댓글인지 확인
+//                        val isReply = element.hasClass("re") ||
+//                                     element.hasClass("reply") ||
+//                                     element.hasClass("comment_row") ||
+//                                     element.parent()?.hasClass("comment") == true
 
-                    if (hasNestedComments) {
-                    // 중첩된 댓글이 있으면 이 요소는 컨테이너일 가능성이 높음
-                    Log.d("ClienApp", "Skipping container element with ${innerNicknames.size} nicknames")
-                    false
-                } else {
-                    true
-                }
-            }
-            
-            Log.d("ClienApp", "Filtered to ${filteredElements.size} comment elements")
-            
-            filteredElements.forEach { commentElement ->
-                try {
-                    // 작성자 찾기 - span.nickname
-                    val authorElement = commentElement.select("span.nickname").first()
-                    val commentAuthor = authorElement?.text()?.trim() ?: ""
-                    
-                    Log.d("ClienApp", "Processing comment by: $commentAuthor")
-                    
-                    // 댓글 내용 찾기 - comment_content 내부의 input value 또는 comment_view의 텍스트
-                    var commentText = ""
-                    
-                    // 먼저 input의 value 속성에서 찾기
-                    val inputElements = commentElement.select("input[type='hidden']")
-                    Log.d("ClienApp", "Found ${inputElements.size} hidden inputs")
-                    
-                    inputElements.forEach { input ->
-                        val value = input.attr("value").trim()
-                        if (value.isNotEmpty()) {
-                            commentText = value
-                            Log.d("ClienApp", "Found comment in input value: $commentText")
+                        val isReply = element.hasClass("comment_row  re") ||
+                                    element.hasClass("comment_row by-author re") == true
+
+                        // 작성자 찾기
+                        val authorElement = element.select(".nickname").first()
+                        val author = authorElement?.text()?.trim() ?: ""
+                        
+                        if (author.isEmpty()) {
+                            NetworkLogger.logDebug("ClienApp", "Skipping element - no author found")
                             return@forEach
                         }
-                    }
-                    
-                    // input에서 못 찾았으면 comment_view의 텍스트에서 찾기
-                    if (commentText.isEmpty()) {
-                        val viewElement = commentElement.select(".comment_view").first()
-                        if (viewElement != null) {
-                            // input 태그를 제외한 텍스트만 가져오기
-                            val tempElement = viewElement.clone()
-                            tempElement.select("input").remove()
-                            commentText = tempElement.text().trim()
-                            Log.d("ClienApp", "Found comment in view text: $commentText")
-                        }
-                    }
-                    
-                    // 그래도 없으면 comment_content 전체에서 찾기
-                    if (commentText.isEmpty()) {
-                        val contentElement = commentElement.select(".comment_content").first()
-                        if (contentElement != null) {
-                            val tempElement = contentElement.clone()
-                            tempElement.select("input").remove()
-                            commentText = tempElement.text().trim()
-                        }
-                    }
-                    
-                    // 날짜 찾기
-                    val dateElement = commentElement.select(".timestamp, .time, .date").first()
-                    val commentDate = dateElement?.text()?.trim() ?: ""
-                    
-                    // 대댓글 여부 확인
-                    val isReply = commentElement.hasClass("re_comment") || 
-                                 commentElement.parent()?.hasClass("comment_re") == true ||
-                                 commentElement.select(".re_comment").isNotEmpty()
-                    
-                    if (commentAuthor.isNotEmpty() && commentText.isNotEmpty()) {
-                        // 중복 체크를 위한 고유 키 생성
-                        val commentKey = "$commentAuthor|$commentText"
                         
-                        if (!processedComments.contains(commentKey)) {
-                            processedComments.add(commentKey)
-                            comments.add(Comment(
-                                author = commentAuthor,
-                                content = commentText,
-                                date = commentDate,
-                                isReply = isReply
-                            ))
-                            Log.d("ClienApp", "Added comment: $commentAuthor - $commentText (Reply: $isReply)")
-                        } else {
-                            Log.d("ClienApp", "Skipped duplicate comment: $commentAuthor - $commentText")
+                        // 댓글 내용 찾기 (여러 방법 시도)
+                        var content = ""
+                        val commentImages = mutableListOf<String>()
+                        
+                        // 방법 1: .comment_view에서 찾기
+                        val commentViewElement = element.select(".comment_view").first()
+                        if (commentViewElement != null) {
+                            content = cleanCommentContent(commentViewElement.text().trim())
+                            
+                            // 댓글 내 이미지 추출 (개선된 로직)
+                            commentViewElement.select("img").forEach { img ->
+                                val src = img.attr("src")
+                                val dataSrc = img.attr("data-src")
+                                val actualSrc = when {
+                                    src.isNotEmpty() && !src.contains("transparent") && !src.contains("blank") -> src
+                                    dataSrc.isNotEmpty() -> dataSrc
+                                    else -> ""
+                                }
+                                
+                                if (actualSrc.isNotEmpty()) {
+                                    val fullImageUrl = when {
+                                        actualSrc.startsWith("http://") || actualSrc.startsWith("https://") -> actualSrc
+                                        actualSrc.startsWith("//") -> "https:$actualSrc"
+                                        actualSrc.startsWith("/") -> "https://m.clien.net$actualSrc"
+                                        else -> "https://m.clien.net/$actualSrc"
+                                    }
+                                    commentImages.add(fullImageUrl)
+                                    NetworkLogger.logDebug("ClienApp", "Found comment image: $fullImageUrl")
+                                }
+                            }
+                            
+                            NetworkLogger.logDebug("ClienApp", "Found content in .comment_view: ${content.take(50)}")
                         }
+                        
+                        // 방법 2: .comment_content에서 찾기 (input 제외)
+//                        if (content.isEmpty() || !isValidCommentContent(content)) {
+//                            val contentElement = element.select(".comment_content").first()
+//                            if (contentElement != null) {
+//                                val cloned = contentElement.clone()
+//                                cloned.select("input, script, style").remove()
+//                                content = cleanCommentContent(cloned.text().trim())
+//                                NetworkLogger.logDebug("ClienApp", "Found content in .comment_content: ${content.take(50)}")
+//                            }
+//                        }
+                        
+                        // 방법 3: data-role이 있는 요소에서 찾기
+//                        if (content.isEmpty() || !isValidCommentContent(content)) {
+//                            val dataRoleElement = element.select("[data-role*='comment-content']").first()
+//                            if (dataRoleElement != null) {
+//                                val cloned = dataRoleElement.clone()
+//                                cloned.select("input, script, style").remove()
+//                                content = cleanCommentContent(cloned.text().trim())
+//                                NetworkLogger.logDebug("ClienApp", "Found content in data-role element: ${content.take(50)}")
+//                            }
+//                        }
+                        
+                        // 방법 4: element 전체에서 찾기 (최후의 수단)
+//                        if (content.isEmpty() || !isValidCommentContent(content)) {
+//                            // 작성자 요소와 메타데이터를 제외하고 텍스트 추출
+//                            val cloned = element.clone()
+//                            cloned.select(
+//                                ".nickname, .post_contact, .comment_info, " +
+//                                ".date, .time, .timestamp, " +
+//                                ".comment_meta, .comment_footer, " +
+//                                "input, script, style, " +
+//                                "button, .btn, .comment_action"
+//                            ).remove()
+//                            content = cloned.text().trim()
+//
+//                            // "date", "메모" 등의 패턴 제거
+//                            content = cleanCommentContent(content)
+//
+//                            NetworkLogger.logDebug("ClienApp", "Found content in whole element: ${content.take(50)}")
+//                        }
+//
+                        // 유효한 댓글인지 확인하고 추가
+                        if (author.isNotEmpty() && content.isNotEmpty() && isValidCommentContent(content)) {
+                            val commentKey = "$author|$content"
+                            if (!processedComments.contains(commentKey)) {
+                                processedComments.add(commentKey)
+                                comments.add(Comment(
+                                    author = author,
+                                    content = content,
+                                    date = "",
+                                    isReply = isReply,
+                                    images = commentImages
+                                ))
+                                NetworkLogger.logDebug("ClienApp", "Added comment: $author (reply: $isReply)")
+                            }
+                        } else {
+                            NetworkLogger.logDebug("ClienApp", "Skipped invalid comment - author: '$author', content: '$content'")
+                        }
+                    } catch (e: Exception) {
+                        NetworkLogger.logError("ClienApp", "Error parsing comment: ${e.message}", e)
                     }
-                } catch (e: Exception) {
-                    Log.e("ClienApp", "Error parsing comment: ${e.message}")
                 }
+            } else {
+                NetworkLogger.logDebug("ClienApp", "No comment area found")
             }
             
-            Log.d("ClienApp", "Found ${comments.size} comments")
+            NetworkLogger.logDebug("ClienApp", "Found ${comments.size} comments total")
             
             val postDetail = PostDetail(
                 title = title,
@@ -461,7 +548,8 @@ class ClienRepository {
                 author = author,
                 date = date,
                 views = views,
-                comments = comments
+                comments = comments,
+                sourceUrl = sourceUrl
             )
             
             // 캐시에 저장
@@ -476,12 +564,75 @@ class ClienRepository {
     }
 }
 
+// 댓글 내용에서 불필요한 메타데이터 제거
+fun cleanCommentContent(content: String): String {
+    var cleaned = content.trim()
+    
+    // 끝에 붙은 메타데이터 패턴 제거
+    val metadataPatterns = listOf(
+        Regex("\\s+(date|time|timestamp|메모|memo)\\s*:?\\s*$", RegexOption.IGNORE_CASE),
+        Regex("\\s+\\d{4}[-./]\\d{1,2}[-./]\\d{1,2}\\s*$"), // 날짜 패턴
+        Regex("\\s+\\d{1,2}:\\d{2}(:\\d{2})?\\s*$"), // 시간 패턴
+        Regex("\\s+(수정|삭제|신고|답글|댓글)\\s*$"), // 액션 버튼 텍스트
+        Regex("\\s+\\[.*?\\]\\s*$"), // [메모] 같은 대괄호 텍스트
+        Regex("\\s+date\\s*$", RegexOption.IGNORE_CASE)
+    )
+    
+    for (pattern in metadataPatterns) {
+        cleaned = pattern.replace(cleaned, "")
+    }
+    
+    // 시작 부분의 메타데이터도 제거
+    val startPatterns = listOf(
+        Regex("^(date|time|timestamp|메모|memo)\\s*:?\\s*", RegexOption.IGNORE_CASE),
+        Regex("^\\[.*?\\]\\s+") // [메모] 같은 대괄호 텍스트
+    )
+    
+    for (pattern in startPatterns) {
+        cleaned = pattern.replace(cleaned, "")
+    }
+    
+    return cleaned.trim()
+}
+
+// 유효한 댓글 내용인지 검증하는 함수
+fun isValidCommentContent(content: String): Boolean {
+    val trimmedContent = content.trim()
+    
+    // 빈 문자열 또는 공백만 있는 경우
+    if (trimmedContent.isEmpty()) return false
+    
+    // "1", "0", "true", "false" 같은 단순한 값들 제외
+    if (trimmedContent in listOf("1", "0", "true", "false", "null", "undefined")) return false
+    
+    // 숫자만 있는 경우 (ID나 플래그 값일 가능성)
+    if (trimmedContent.matches(Regex("^\\d+$"))) return false
+    
+    // 너무 짧은 내용 (1-2글자) 제외 (단, 이모지나 특수문자는 허용)
+    if (trimmedContent.length <= 2 && trimmedContent.matches(Regex("^[a-zA-Z0-9]+$"))) return false
+    
+    // HTML 태그만 있는 경우
+    if (trimmedContent.matches(Regex("^<[^>]*>$"))) return false
+    
+    // 메타데이터만 있는 경우
+    if (trimmedContent.matches(Regex("^(date|time|timestamp|메모|memo|수정|삭제|신고|답글|댓글)$", RegexOption.IGNORE_CASE))) return false
+    
+    return true
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClienApp() {
     val navController = rememberNavController()
+    val context = LocalContext.current
     
-    NavHost(navController = navController, startDestination = "boardList") {
+    // Coil ImageLoader with unsafe SSL settings
+    val imageLoader = ImageLoader.Builder(context)
+        .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
+        .build()
+    
+    CompositionLocalProvider(LocalImageLoader provides imageLoader) {
+        NavHost(navController = navController, startDestination = "boardList") {
         composable(
             "boardList",
             enterTransition = { slideInHorizontally(animationSpec = tween(0)) },
@@ -513,6 +664,7 @@ fun ClienApp() {
             val postTitle = UrlUtils.decodeUrl(backStackEntry.arguments?.getString("postTitle") ?: "")
             PostDetailScreen(navController, postUrl, postTitle)
         }
+    }
     }
 }
 
@@ -807,6 +959,12 @@ fun PostDetailScreen(navController: NavController, postUrl: String, postTitle: S
                             .verticalScroll(rememberScrollState())
                             .padding(16.dp)
                     ) {
+                // 0. 출처 링크 미리보기 (있는 경우 최상단에 표시)
+                if (postDetail!!.sourceUrl.isNotEmpty()) {
+                    LinkPreview(url = postDetail!!.sourceUrl)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                
                 // 1. 제목
                 Text(
                     text = postDetail!!.title,
@@ -840,92 +998,21 @@ fun PostDetailScreen(navController: NavController, postUrl: String, postTitle: S
                     thickness = 1.dp
                 )
                 
-                // 4. 내용
-                LinkifyText(
-                    text = postDetail!!.content,
-                    fontSize = 16,
-                    lineHeight = 24
-                )
-                
-                // YouTube 영상 표시
-                if (postDetail!!.youtubeVideoIds.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    postDetail!!.youtubeVideoIds.forEach { videoId ->
-                        val context = LocalContext.current
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .padding(vertical = 8.dp)
-                                .clickable {
-                                    // YouTube 앱 또는 브라우저로 열기
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
-                                    context.startActivity(intent)
-                                },
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                // YouTube 썸네일 이미지
-                                AsyncImage(
-                                    model = "https://img.youtube.com/vi/$videoId/hqdefault.jpg",
-                                    contentDescription = "YouTube 비디오 썸네일",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                                
-                                // 재생 버튼 오버레이
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.3f))
-                                )
-                                
-                                // 재생 아이콘
-                                Icon(
-                                    imageVector = Icons.Filled.PlayArrow,
-                                    contentDescription = "재생",
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .align(Alignment.Center),
-                                    tint = Color.White
-                                )
-                                
-                                // YouTube 로고
-                                Text(
-                                    text = "YouTube",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .background(
-                                            color = Color.Red,
-                                            shape = RoundedCornerShape(4.dp)
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        .align(Alignment.TopEnd)
-                                        .padding(8.dp)
-                                )
-                            }
-                        }
-                    }
+                // 4. 내용 (HTML 내용이 있으면 HTML 렌더링, 없으면 일반 텍스트)
+                if (postDetail!!.htmlContent.isNotEmpty()) {
+                    HtmlContent(
+                        htmlContent = postDetail!!.htmlContent,
+                        fontSize = 16,
+                        lineHeight = 24
+                    )
+                } else {
+                    LinkifyText(
+                        text = postDetail!!.content,
+                        fontSize = 16,
+                        lineHeight = 24
+                    )
                 }
                 
-                // 이미지 표시
-                if (postDetail!!.images.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    postDetail!!.images.forEach { imageUrl ->
-                        AsyncImage(
-                            model = imageUrl,
-                            contentDescription = "게시글 이미지",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            contentScale = ContentScale.FillWidth
-                        )
-                    }
-                }
                 
                 // 내용 끝 가로 라인
                 Divider(
@@ -987,6 +1074,29 @@ fun CommentItem(comment: Comment) {
             lineHeight = 20,
             modifier = Modifier.padding(top = 2.dp)
         )
+        
+        // 3. 이미지 (있는 경우)
+        if (comment.images.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            comment.images.forEach { imageUrl ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = "댓글 이미지",
+                        modifier = Modifier.fillMaxWidth(),
+                        contentScale = ContentScale.FillWidth,
+                        onError = { error ->
+                            NetworkLogger.logError("CommentImage", "Failed to load: $imageUrl", error.result.throwable)
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1113,6 +1223,12 @@ class MainActivity : ComponentActivity() {
         
         // 방문한 글 관리자 초기화
         VisitedPostsManager.init(this)
+        
+        // Coil 기본 이미지 로더 설정
+        val imageLoader = ImageLoader.Builder(this)
+            .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
+            .build()
+        coil.Coil.setImageLoader(imageLoader)
         
         setContent {
             MaterialTheme {

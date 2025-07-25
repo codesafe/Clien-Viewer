@@ -110,3 +110,22 @@ ClienApp is an Android application that provides a custom UI for browsing m.clie
 - Uses Kotlin 1.9.20 with Java 17
 - Network security config allows cleartext traffic
 - ProGuard rules configured for JSoup and Retrofit
+
+
+## 화면/내용 구성
+- Clien
+	|
+	+-- 목록들
+		 +-- 목록 1
+			  +-- 글 1
+				   +-- 글내용
+						+-- 댓글
+							  +-- 대댓글
+			  +-- 글 2
+			  +-- 글 3
+			  .....
+		 +-- 목록 2
+		 +-- 목록 3
+		 ....
+	
+
