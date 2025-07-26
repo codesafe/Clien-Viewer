@@ -20,8 +20,8 @@ import coil.compose.LocalImageLoader
 fun HtmlContent(
     htmlContent: String,
     modifier: Modifier = Modifier,
-    fontSize: Int = 16,
-    lineHeight: Int = 24
+    fontSize: Int = 15,
+    lineHeight: Int = 20
 ) {
     val doc = Jsoup.parse(htmlContent)
     val body = doc.body()

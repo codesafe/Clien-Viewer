@@ -923,7 +923,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                 ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                             .padding(16.dp)
                     ) {
@@ -970,14 +970,14 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                 if (postDetail!!.htmlContent.isNotEmpty()) {
                     HtmlContent(
                         htmlContent = postDetail!!.htmlContent,
-                        fontSize = 16,
-                        lineHeight = 24
+                        fontSize = 15,
+                        lineHeight = 20
                     )
                 } else {
                     LinkifyText(
                         text = postDetail!!.content,
-                        fontSize = 16,
-                        lineHeight = 24
+                        fontSize = 15,
+                        lineHeight = 20
                     )
                 }
                 

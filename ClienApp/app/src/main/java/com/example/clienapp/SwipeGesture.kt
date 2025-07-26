@@ -39,7 +39,7 @@ fun Modifier.swipeBackGesture(
             if (!hasTriggered &&
                 abs(deltaX) > abs(deltaY) && 
                 //startX < 300f &&
-                deltaX > 100f) {
+                deltaX > 150f) {
                 Log.d("SwipeGesture", "Swipe back triggered! deltaX: $deltaX, startX: $startX")
                 hasTriggered = true
                 onSwipeBack()
