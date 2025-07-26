@@ -1,40 +1,42 @@
-package com.example.clienapp
-
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.runtime.mutableStateListOf // Add this import
 
 object VisitedPostsManager {
     private const val PREF_NAME = "visited_posts"
     private const val KEY_VISITED_POSTS = "visited_post_urls"
     private lateinit var sharedPreferences: SharedPreferences
-    private val visitedPosts = mutableSetOf<String>()
-    
+    private val _visitedPosts = mutableStateListOf<String>() // Change to mutableStateListOf
+    val visitedPosts: List<String> get() = _visitedPosts // Expose as immutable list
+
     fun init(context: Context) {
         sharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         loadVisitedPosts()
     }
-    
+
     private fun loadVisitedPosts() {
         val savedPosts = sharedPreferences.getStringSet(KEY_VISITED_POSTS, emptySet()) ?: emptySet()
-        visitedPosts.clear()
-        visitedPosts.addAll(savedPosts)
+        _visitedPosts.clear()
+        _visitedPosts.addAll(savedPosts)
     }
-    
+
     fun markAsVisited(postUrl: String) {
-        visitedPosts.add(postUrl)
-        saveVisitedPosts()
+        if (!_visitedPosts.contains(postUrl)) { // Only add if not already present
+            _visitedPosts.add(postUrl)
+            saveVisitedPosts()
+        }
     }
-    
+
     fun isVisited(postUrl: String): Boolean {
-        return visitedPosts.contains(postUrl)
+        return _visitedPosts.contains(postUrl)
     }
-    
+
     private fun saveVisitedPosts() {
-        sharedPreferences.edit().putStringSet(KEY_VISITED_POSTS, visitedPosts).apply()
+        sharedPreferences.edit().putStringSet(KEY_VISITED_POSTS, _visitedPosts.toSet()).apply()
     }
-    
+
     fun clearAll() {
-        visitedPosts.clear()
+        _visitedPosts.clear()
         saveVisitedPosts()
     }
 }

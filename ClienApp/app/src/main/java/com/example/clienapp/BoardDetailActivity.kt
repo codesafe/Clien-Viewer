@@ -1,0 +1,228 @@
+package com.example.clienapp
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.platform.LocalContext
+import coil.ImageLoader
+import coil.compose.LocalImageLoader
+import androidx.compose.runtime.CompositionLocalProvider
+import android.util.Log
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.snapshotFlow
+import android.content.Intent // Add this import
+
+class BoardDetailActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        val boardUrl = UrlUtils.decodeUrl(intent.getStringExtra("boardUrl") ?: "")
+        val boardTitle = UrlUtils.decodeUrl(intent.getStringExtra("boardTitle") ?: "")
+
+        Log.d("BoardDetailActivity", "Received boardUrl: $boardUrl, boardTitle: $boardTitle")
+
+        // Coil ImageLoader with unsafe SSL settings
+        val imageLoader = ImageLoader.Builder(this)
+            .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
+            .build()
+        coil.Coil.setImageLoader(imageLoader)
+
+        setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalImageLoader provides imageLoader) {
+                    BoardDetailScreen(boardUrl = boardUrl, boardTitle = boardTitle, onBack = { finish() })
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) {
+    var posts by remember { mutableStateOf<List<PostItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var isLoadingMore by remember { mutableStateOf(false) }
+    var currentPage by remember { mutableStateOf(0) }
+    var hasMorePages by remember { mutableStateOf(true) }
+    val repository = remember { ClienRepository() }
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val swipeRefreshState = rememberSwipeRefreshState(isRefreshing)
+    val context = LocalContext.current // Add context for Intent
+
+    // 초기 로드
+    LaunchedEffect(boardUrl) {
+        if (posts.isEmpty()) { // Only fetch if posts are not already loaded
+            scope.launch {
+                isLoading = true
+                posts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = false)
+                currentPage = 0
+                hasMorePages = posts.size >= 20
+                isLoading = false
+            }
+        }
+    }
+
+    // Pull to refresh
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
+            scope.launch {
+                val newPosts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = true)
+                posts = newPosts
+                currentPage = 0
+                hasMorePages = newPosts.size >= 20
+                isRefreshing = false
+            }
+        }
+    }
+
+    // 무한 스크롤을 위한 마지막 아이템 감지
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo }
+            .collect { layoutInfo ->
+                val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                val totalItemsCount = layoutInfo.totalItemsCount
+
+                // 마지막에서 3번째 아이템이 보이고, 더 로드할 수 있고, 현재 로딩 중이 아닐 때
+                if (lastVisibleItemIndex >= totalItemsCount - 3 &&
+                    hasMorePages &&
+                    !isLoadingMore &&
+                    !isLoading &&
+                    totalItemsCount > 0) {
+
+                    isLoadingMore = true
+                    scope.launch {
+                        val nextPage = currentPage + 1
+                        Log.d("ClienApp", "Loading page $nextPage (URL param po=$nextPage)")
+                        val morePosts = repository.fetchBoardPosts(boardUrl, page = nextPage)
+
+                        if (morePosts.isNotEmpty()) {
+                            posts = posts + morePosts
+                            currentPage = nextPage
+                            hasMorePages = morePosts.size >= 20
+                            Log.d("ClienApp", "Loaded ${morePosts.size} posts from page $nextPage, total: ${posts.size}")
+                        } else {
+                            hasMorePages = false
+                            Log.d("ClienApp", "No more posts found on page $nextPage")
+                        }
+                        isLoadingMore = false
+                    }
+                }
+            }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(boardTitle) },
+                navigationIcon = {
+                    IconButton(onClick = { onBack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                    }
+                }
+            )
+        },
+        modifier = Modifier.swipeBackGesture {
+            onBack()
+        }
+    ) { paddingValues ->
+        SwipeRefresh(
+            state = swipeRefreshState,
+            onRefresh = { isRefreshing = true },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(posts.size) { index ->
+                        val post = posts[index]
+                        val currentIsVisited = VisitedPostsManager.isVisited(post.url)
+
+                        PostItemCard(post, currentIsVisited) {
+                            // Mark as visited immediately
+                            VisitedPostsManager.markAsVisited(post.url)
+
+                            val encodedUrl = UrlUtils.encodeUrl(post.url)
+                            val encodedTitle = UrlUtils.encodeUrl(post.title)
+                            val intent = Intent(context, PostDetailActivity::class.java).apply {
+                                putExtra("postUrl", encodedUrl)
+                                putExtra("postTitle", encodedTitle)
+                            }
+                            context.startActivity(intent)
+                        }
+                        if (index < posts.size - 1) {
+                            Divider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                            )
+                        }
+                    }
+
+                    // 로딩 인디케이터
+                    if (isLoadingMore) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
+                                )
+                            }
+                        }
+                    }
+
+                    // 더 이상 글이 없을 때 메시지
+                    if (!hasMorePages && posts.isNotEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "더 이상 글이 없습니다",
+                                    modifier = Modifier.align(androidx.compose.ui.Alignment.Center),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,7 +1,6 @@
 package com.example.clienapp
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,14 +8,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.items // Add this import
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
-import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
@@ -36,8 +33,6 @@ import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import kotlinx.coroutines.launch
@@ -49,7 +44,6 @@ import okhttp3.Request
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import coil.ImageLoader
-import androidx.compose.ui.platform.LocalContext
 import coil.compose.LocalImageLoader
 import androidx.compose.runtime.CompositionLocalProvider
 
@@ -471,47 +465,6 @@ class ClienRepository {
                             NetworkLogger.logDebug("ClienApp", "Found content in .comment_view: ${content.take(50)}")
                         }
                         
-                        // 방법 2: .comment_content에서 찾기 (input 제외)
-//                        if (content.isEmpty() || !isValidCommentContent(content)) {
-//                            val contentElement = element.select(".comment_content").first()
-//                            if (contentElement != null) {
-//                                val cloned = contentElement.clone()
-//                                cloned.select("input, script, style").remove()
-//                                content = cleanCommentContent(cloned.text().trim())
-//                                NetworkLogger.logDebug("ClienApp", "Found content in .comment_content: ${content.take(50)}")
-//                            }
-//                        }
-                        
-                        // 방법 3: data-role이 있는 요소에서 찾기
-//                        if (content.isEmpty() || !isValidCommentContent(content)) {
-//                            val dataRoleElement = element.select("[data-role*='comment-content']").first()
-//                            if (dataRoleElement != null) {
-//                                val cloned = dataRoleElement.clone()
-//                                cloned.select("input, script, style").remove()
-//                                content = cleanCommentContent(cloned.text().trim())
-//                                NetworkLogger.logDebug("ClienApp", "Found content in data-role element: ${content.take(50)}")
-//                            }
-//                        }
-                        
-                        // 방법 4: element 전체에서 찾기 (최후의 수단)
-//                        if (content.isEmpty() || !isValidCommentContent(content)) {
-//                            // 작성자 요소와 메타데이터를 제외하고 텍스트 추출
-//                            val cloned = element.clone()
-//                            cloned.select(
-//                                ".nickname, .post_contact, .comment_info, " +
-//                                ".date, .time, .timestamp, " +
-//                                ".comment_meta, .comment_footer, " +
-//                                "input, script, style, " +
-//                                "button, .btn, .comment_action"
-//                            ).remove()
-//                            content = cloned.text().trim()
-//
-//                            // "date", "메모" 등의 패턴 제거
-//                            content = cleanCommentContent(content)
-//
-//                            NetworkLogger.logDebug("ClienApp", "Found content in whole element: ${content.take(50)}")
-//                        }
-//
                         // 유효한 댓글인지 확인하고 추가
                         if (author.isNotEmpty() && content.isNotEmpty() && isValidCommentContent(content)) {
                             val commentKey = "$author|$content"
@@ -642,28 +595,6 @@ fun ClienApp() {
         ) {
             BoardListScreen(navController)
         }
-        composable(
-            "boardDetail/{boardUrl}/{boardTitle}",
-            enterTransition = { slideInHorizontally(animationSpec = tween(0)) { it } },
-            exitTransition = { slideOutHorizontally(animationSpec = tween(0)) { -it } },
-            popEnterTransition = { slideInHorizontally(animationSpec = tween(0)) { -it } },
-            popExitTransition = { slideOutHorizontally(animationSpec = tween(0)) { it } }
-        ) { backStackEntry ->
-            val boardUrl = UrlUtils.decodeUrl(backStackEntry.arguments?.getString("boardUrl") ?: "")
-            val boardTitle = UrlUtils.decodeUrl(backStackEntry.arguments?.getString("boardTitle") ?: "")
-            BoardDetailScreen(navController, boardUrl, boardTitle)
-        }
-        composable(
-            "postDetail/{postUrl}/{postTitle}",
-            enterTransition = { slideInHorizontally(animationSpec = tween(0)) { it } },
-            exitTransition = { slideOutHorizontally(animationSpec = tween(0)) { -it } },
-            popEnterTransition = { slideInHorizontally(animationSpec = tween(0)) { -it } },
-            popExitTransition = { slideOutHorizontally(animationSpec = tween(0)) { it } }
-        ) { backStackEntry ->
-            val postUrl = UrlUtils.decodeUrl(backStackEntry.arguments?.getString("postUrl") ?: "")
-            val postTitle = UrlUtils.decodeUrl(backStackEntry.arguments?.getString("postTitle") ?: "")
-            PostDetailScreen(navController, postUrl, postTitle)
-        }
     }
     }
 }
@@ -711,18 +642,20 @@ fun BoardListScreen(navController: NavController) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-/*                    .background(
-                        color = MaterialTheme.colorScheme.error,
-                    ),*/
                 
                 contentPadding = PaddingValues(8.dp),  // 16dp에서 8dp로 축소
                 verticalArrangement = Arrangement.spacedBy(4.dp)  // 8dp에서 4dp로 축소
             ) {
                 items(menuItems) { item ->
+                    val context = LocalContext.current // Add this line
                     MenuItemCard(item) {
                         val encodedUrl = UrlUtils.encodeUrl(item.url)
                         val encodedTitle = UrlUtils.encodeUrl(item.title)
-                        navController.navigate("boardDetail/$encodedUrl/$encodedTitle")
+                        val intent = Intent(context, BoardDetailActivity::class.java).apply {
+                            putExtra("boardUrl", encodedUrl)
+                            putExtra("boardTitle", encodedTitle)
+                        }
+                        context.startActivity(intent)
                     }
                 }
             }
@@ -730,6 +663,7 @@ fun BoardListScreen(navController: NavController) {
     }
 }
 
+/*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardDetailScreen(navController: NavController, boardUrl: String, boardTitle: String) {
@@ -844,10 +778,20 @@ fun BoardDetailScreen(navController: NavController, boardUrl: String, boardTitle
                 ) {
                     items(posts.size) { index ->
                         val post = posts[index]
-                        PostItemCard(post) {
+                        val context = LocalContext.current
+                        val currentIsVisited = VisitedPostsManager.isVisited(post.url)
+
+                        PostItemCard(post, currentIsVisited) {
+                            // Mark as visited immediately
+                            VisitedPostsManager.markAsVisited(post.url)
+
                             val encodedUrl = UrlUtils.encodeUrl(post.url)
                             val encodedTitle = UrlUtils.encodeUrl(post.title)
-                            navController.navigate("postDetail/$encodedUrl/$encodedTitle")
+                            val intent = Intent(context, PostDetailActivity::class.java).apply {
+                                putExtra("postUrl", encodedUrl)
+                                putExtra("postTitle", encodedTitle)
+                            }
+                            context.startActivity(intent)
                         }
                         if (index < posts.size - 1) {
                             Divider(
@@ -894,31 +838,36 @@ fun BoardDetailScreen(navController: NavController, boardUrl: String, boardTitle
         }
     }
 }
+*/
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PostDetailScreen(navController: NavController, postUrl: String, postTitle: String) {
+fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
     var postDetail by remember { mutableStateOf<PostDetail?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
     val repository = remember { ClienRepository() }
     val scope = rememberCoroutineScope()
     val swipeRefreshState = rememberSwipeRefreshState(isRefreshing)
-    
+
     // 초기 로드
     LaunchedEffect(postUrl) {
+        Log.d("PostDetailScreen", "Loading post detail for URL: $postUrl")
         scope.launch {
             isLoading = true
             postDetail = repository.fetchPostDetail(postUrl)
             isLoading = false
-            
-            // 글을 성공적으로 로드했으면 방문 기록에 추가
+
             if (postDetail != null) {
+                Log.d("PostDetailScreen", "Post detail loaded: ${postDetail!!.title}")
+                Log.d("PostDetailScreen", "Content length: ${postDetail!!.content.length}, HTML content length: ${postDetail!!.htmlContent.length}")
                 VisitedPostsManager.markAsVisited(postUrl)
+            } else {
+                Log.e("PostDetailScreen", "Failed to load post detail for URL: $postUrl")
             }
         }
     }
-    
+
     // Pull to refresh
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) {
@@ -928,20 +877,20 @@ fun PostDetailScreen(navController: NavController, postUrl: String, postTitle: S
             }
         }
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(postTitle, maxLines = 1) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { onBack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
                     }
                 }
             )
         },
         modifier = Modifier.swipeBackGesture {
-            navController.popBackStack()
+            onBack()
         }
     ) { paddingValues ->
         if (isLoading) {
@@ -1135,10 +1084,7 @@ fun MenuItemCard(item: MenuItem, onClick: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
-                .background(
-                    color = Color(0xFFDDDDDD),
-                ),
+                .padding(12.dp),
         ) {
             Text(
                 text = item.title,
@@ -1159,9 +1105,7 @@ fun MenuItemCard(item: MenuItem, onClick: () -> Unit) {
 }
 
 @Composable
-fun PostItemCard(post: PostItem, onClick: () -> Unit) {
-    val isVisited = VisitedPostsManager.isVisited(post.url)
-    
+fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()

@@ -48,7 +48,7 @@ object SSLHelper {
                 val response = chain.proceed(request)
                 val endTime = System.currentTimeMillis()
                 
-                if (NetworkLogger.shouldLogPackets()) {
+/*                if (NetworkLogger.shouldLogPackets()) {
                     NetworkLogger.logDebug("ClienApp-Packet", "========== RESPONSE START ==========")
                     NetworkLogger.logDebug("ClienApp-Packet", "Response Code: ${response.code}")
                     NetworkLogger.logDebug("ClienApp-Packet", "Response Message: ${response.message}")
@@ -69,7 +69,7 @@ object SSLHelper {
                     }
                     
                     NetworkLogger.logDebug("ClienApp-Packet", "========== RESPONSE END ==========")
-                }
+                }*/
                 response
             }
             
