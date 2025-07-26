@@ -668,6 +668,10 @@ fun ClienApp() {
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// 첫화면
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoardListScreen(navController: NavController) {
@@ -703,9 +707,14 @@ fun BoardListScreen(navController: NavController) {
             }
         } else {
             LazyColumn(
+                // 첫화면의 배경
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
+/*                    .background(
+                        color = MaterialTheme.colorScheme.error,
+                    ),*/
+                
                 contentPadding = PaddingValues(8.dp),  // 16dp에서 8dp로 축소
                 verticalArrangement = Arrangement.spacedBy(4.dp)  // 8dp에서 4dp로 축소
             ) {
@@ -737,12 +746,14 @@ fun BoardDetailScreen(navController: NavController, boardUrl: String, boardTitle
     
     // 초기 로드
     LaunchedEffect(boardUrl) {
-        scope.launch {
-            isLoading = true
-            posts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = true)
-            currentPage = 0
-            hasMorePages = posts.size >= 20
-            isLoading = false
+        if (posts.isEmpty()) { // Only fetch if posts are not already loaded
+            scope.launch {
+                isLoading = true
+                posts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = false) // forceRefresh를 false로 변경
+                currentPage = 0
+                hasMorePages = posts.size >= 20
+                isLoading = false
+            }
         }
     }
     
@@ -831,11 +842,19 @@ fun BoardDetailScreen(navController: NavController, boardUrl: String, boardTitle
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(posts) { post ->
+                    items(posts.size) { index ->
+                        val post = posts[index]
                         PostItemCard(post) {
                             val encodedUrl = UrlUtils.encodeUrl(post.url)
                             val encodedTitle = UrlUtils.encodeUrl(post.title)
                             navController.navigate("postDetail/$encodedUrl/$encodedTitle")
+                        }
+                        if (index < posts.size - 1) {
+                            Divider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                            )
                         }
                     }
                     
@@ -1103,20 +1122,29 @@ fun CommentItem(comment: Comment) {
 @Composable
 fun MenuItemCard(item: MenuItem, onClick: () -> Unit) {
     Card(
+        // 메뉴아이템의 배경
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            //.background(Color(0xFFDDDDDD)), // 배경색 변경
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFDDDDDD) // 배경색 변경
+        )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp)  // 16dp에서 8dp로 축소
+                .padding(12.dp)
+                .background(
+                    color = Color(0xFFDDDDDD),
+                ),
         ) {
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.titleLarge,  // titleMedium에서 titleLarge로 증가
-                fontSize = 18.sp  // 14sp에서 18sp로 (약 30% 증가)
+                color = Color(0xFF000000),
+                fontSize = 20.sp
             )
             if (item.description.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(3.dp))  // 2dp에서 3dp로 증가
@@ -1149,7 +1177,7 @@ fun PostItemCard(post: PostItem, onClick: () -> Unit) {
             defaultElevation = if (isVisited) 0.5.dp else 1.dp
         ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color(0xFFDDDDDD) // 배경색 변경
         )
     ) {
         Column(
