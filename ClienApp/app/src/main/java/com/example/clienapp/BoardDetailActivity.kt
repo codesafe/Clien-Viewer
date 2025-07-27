@@ -20,12 +20,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
 import android.content.Intent // Add this import
+
 
 class BoardDetailActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,16 +132,19 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(boardTitle) },
-                navigationIcon = {
-                    IconButton(onClick = { onBack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+            Column {
+                TopAppBar(
+                    title = { Text(boardTitle) },
+                    navigationIcon = {
+                        IconButton(onClick = { onBack() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                        }
                     }
-                }
-            )
+                )
+                Divider(thickness = 2.dp, color = Color.Black)
+            }
         },
-        modifier = Modifier.swipeBackGesture {
+        modifier = Modifier.smartSwipeBack {
             onBack()
         }
     ) { paddingValues ->

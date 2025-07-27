@@ -8,8 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items // Add this import
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed // Add this import
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,12 +17,13 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -593,7 +593,7 @@ fun ClienApp() {
             popEnterTransition = { slideInHorizontally(animationSpec = tween(0)) },
             popExitTransition = { slideOutHorizontally(animationSpec = tween(0)) }
         ) {
-            BoardListScreen(navController)
+            BoardListScreen()
         }
     }
     }
@@ -605,7 +605,7 @@ fun ClienApp() {
 // 첫화면
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BoardListScreen(navController: NavController) {
+fun BoardListScreen() {
     var menuItems by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     val repository = remember { ClienRepository() }
@@ -621,9 +621,12 @@ fun BoardListScreen(navController: NavController) {
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Clien 게시판") }
-            )
+            Column {
+                TopAppBar(
+                    title = { Text("Clien 게시판") }
+                )
+                Divider(thickness = 2.dp, color = Color.Black)
+            }
         }
     ) { paddingValues ->
         if (isLoading) {
@@ -646,8 +649,8 @@ fun BoardListScreen(navController: NavController) {
                 contentPadding = PaddingValues(8.dp),  // 16dp에서 8dp로 축소
                 verticalArrangement = Arrangement.spacedBy(4.dp)  // 8dp에서 4dp로 축소
             ) {
-                items(menuItems) { item ->
-                    val context = LocalContext.current // Add this line
+                itemsIndexed(menuItems) { index, item ->
+                    val context = LocalContext.current
                     MenuItemCard(item) {
                         val encodedUrl = UrlUtils.encodeUrl(item.url)
                         val encodedTitle = UrlUtils.encodeUrl(item.title)
@@ -657,188 +660,22 @@ fun BoardListScreen(navController: NavController) {
                         }
                         context.startActivity(intent)
                     }
-                }
-            }
-        }
-    }
-}
-
-/*
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BoardDetailScreen(navController: NavController, boardUrl: String, boardTitle: String) {
-    var posts by remember { mutableStateOf<List<PostItem>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    var isLoadingMore by remember { mutableStateOf(false) }
-    var currentPage by remember { mutableStateOf(0) }
-    var hasMorePages by remember { mutableStateOf(true) }
-    val repository = remember { ClienRepository() }
-    val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
-    val swipeRefreshState = rememberSwipeRefreshState(isRefreshing)
-    
-    // 초기 로드
-    LaunchedEffect(boardUrl) {
-        if (posts.isEmpty()) { // Only fetch if posts are not already loaded
-            scope.launch {
-                isLoading = true
-                posts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = false) // forceRefresh를 false로 변경
-                currentPage = 0
-                hasMorePages = posts.size >= 20
-                isLoading = false
-            }
-        }
-    }
-    
-    // Pull to refresh
-    LaunchedEffect(isRefreshing) {
-        if (isRefreshing) {
-            scope.launch {
-                val newPosts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = true)
-                posts = newPosts
-                currentPage = 0
-                hasMorePages = newPosts.size >= 20
-                isRefreshing = false
-            }
-        }
-    }
-    
-    // 무한 스크롤을 위한 마지막 아이템 감지
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo }
-            .collect { layoutInfo ->
-                val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                val totalItemsCount = layoutInfo.totalItemsCount
-                
-                // 마지막에서 3번째 아이템이 보이고, 더 로드할 수 있고, 현재 로딩 중이 아닐 때
-                if (lastVisibleItemIndex >= totalItemsCount - 3 && 
-                    hasMorePages && 
-                    !isLoadingMore && 
-                    !isLoading && 
-                    totalItemsCount > 0) {
-                    
-                    isLoadingMore = true
-                    scope.launch {
-                        val nextPage = currentPage + 1
-                        Log.d("ClienApp", "Loading page $nextPage (URL param po=$nextPage)")
-                        val morePosts = repository.fetchBoardPosts(boardUrl, page = nextPage)
-                        
-                        if (morePosts.isNotEmpty()) {
-                            posts = posts + morePosts
-                            currentPage = nextPage
-                            hasMorePages = morePosts.size >= 20
-                            Log.d("ClienApp", "Loaded ${morePosts.size} posts from page $nextPage, total: ${posts.size}")
-                        } else {
-                            hasMorePages = false
-                            Log.d("ClienApp", "No more posts found on page $nextPage")
-                        }
-                        isLoadingMore = false
-                    }
-                }
-            }
-    }
-    
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(boardTitle) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
-                    }
-                }
-            )
-        },
-        modifier = Modifier.swipeBackGesture {
-            navController.popBackStack()
-        }
-    ) { paddingValues ->
-        SwipeRefresh(
-            state = swipeRefreshState,
-            onRefresh = { isRefreshing = true },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(posts.size) { index ->
-                        val post = posts[index]
-                        val context = LocalContext.current
-                        val currentIsVisited = VisitedPostsManager.isVisited(post.url)
-
-                        PostItemCard(post, currentIsVisited) {
-                            // Mark as visited immediately
-                            VisitedPostsManager.markAsVisited(post.url)
-
-                            val encodedUrl = UrlUtils.encodeUrl(post.url)
-                            val encodedTitle = UrlUtils.encodeUrl(post.title)
-                            val intent = Intent(context, PostDetailActivity::class.java).apply {
-                                putExtra("postUrl", encodedUrl)
-                                putExtra("postTitle", encodedTitle)
-                            }
-                            context.startActivity(intent)
-                        }
-                        if (index < posts.size - 1) {
-                            Divider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                thickness = 0.5.dp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                            )
-                        }
-                    }
-                    
-                    // 로딩 인디케이터
-                    if (isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
-                                )
-                            }
-                        }
-                    }
-                    
-                    // 더 이상 글이 없을 때 메시지
-                    if (!hasMorePages && posts.isNotEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                Text(
-                                    text = "더 이상 글이 없습니다",
-                                    modifier = Modifier.align(androidx.compose.ui.Alignment.Center),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                    if (index < menuItems.size - 1) {
+                        Divider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                        )
                     }
                 }
             }
         }
     }
 }
-*/
+
+
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -880,16 +717,19 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(postTitle, maxLines = 1) },
-                navigationIcon = {
-                    IconButton(onClick = { onBack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+            Column {
+                TopAppBar(
+                    title = { Text(postTitle, maxLines = 1) },
+                    navigationIcon = {
+                        IconButton(onClick = { onBack() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                        }
                     }
-                }
-            )
+                )
+                Divider(thickness = 2.dp, color = Color.Black)
+            }
         },
-        modifier = Modifier.swipeBackGesture {
+        modifier = Modifier.smartSwipeBack {
             onBack()
         }
     ) { paddingValues ->
@@ -945,7 +785,12 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                 // 2. Author : date
                 if (postDetail!!.author.isNotEmpty() || postDetail!!.date.isNotEmpty()) {
                     Text(
-                        text = "${postDetail!!.author} : ${postDetail!!.date}",
+                        text = buildAnnotatedString {
+                            withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)) {
+                                append(postDetail!!.author)
+                            }
+                            append(" : ${postDetail!!.date}")
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1070,120 +915,100 @@ fun CommentItem(comment: Comment) {
 
 @Composable
 fun MenuItemCard(item: MenuItem, onClick: () -> Unit) {
-    Card(
-        // 메뉴아이템의 배경
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-            //.background(Color(0xFFDDDDDD)), // 배경색 변경
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFDDDDDD) // 배경색 변경
-        )
+            .clickable { onClick() }
+            .background(Color.White) // 흰색 배경
+            .padding(12.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-        ) {
+        Text(
+            text = item.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = Color.Black, // 검은색 글씨
+            fontSize = 20.sp
+        )
+        if (item.description.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleLarge,  // titleMedium에서 titleLarge로 증가
-                color = Color(0xFF000000),
-                fontSize = 20.sp
+                text = item.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Black, // 검은색 글씨
+                fontSize = 15.sp
             )
-            if (item.description.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(3.dp))  // 2dp에서 3dp로 증가
-                Text(
-                    text = item.description,
-                    style = MaterialTheme.typography.bodyMedium,  // bodySmall에서 bodyMedium으로 증가
-                    fontSize = 15.sp  // 12sp에서 15sp로 (약 25% 증가)
-                )
-            }
         }
     }
 }
 
 @Composable
 fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
-    Card(
+    val backgroundColor = if (isVisited) Color(0xFFF0F0F0) else Color.White
+    val titleColor = if (isVisited) Color.DarkGray else Color.Black
+    val metaColor = if (isVisited) Color.Gray else Color.DarkGray
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .then(
-                if (isVisited) {
-                    Modifier.alpha(0.6f)
-                } else {
-                    Modifier
-                }
-            ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isVisited) 0.5.dp else 1.dp
-        ),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFDDDDDD) // 배경색 변경
-        )
+            .background(
+                color = backgroundColor
+            )
+            .padding(8.dp) // 더 줄임
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)  // 더 줄임
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // 공감수 표시
-                if (post.likes > 0) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                color = MaterialTheme.colorScheme.error,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = post.likes.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onError,
-                            fontWeight = FontWeight.Bold
+            // 공감수 표시
+            if (post.likes > 0) {
+                Box(
+                    modifier = Modifier
+                        .background(
+                            color = MaterialTheme.colorScheme.error,
+                            shape = RoundedCornerShape(4.dp)
                         )
-                    }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = post.likes.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onError,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-                
-                // 제목
+            }
+
+            // 제목
+            Text(
+                text = post.title,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 12.sp,
+                maxLines = 2,
+                color = titleColor,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            if (post.author.isNotEmpty()) {
                 Text(
-                    text = post.title,
+                    text = post.author,
                     style = MaterialTheme.typography.bodySmall,
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.primary // 파란색으로 변경
                 )
             }
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                if (post.author.isNotEmpty()) {
-                    Text(
-                        text = post.author,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontSize = 10.sp,  // 11sp에서 10sp로
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (post.date.isNotEmpty()) {
-                    Text(
-                        text = post.date,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontSize = 10.sp,  // 11sp에서 10sp로
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            if (post.date.isNotEmpty()) {
+                Text(
+                    text = post.date,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 10.sp,
+                    color = metaColor
+                )
             }
         }
     }
