@@ -16,6 +16,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
+import androidx.compose.foundation.clickable
 
 import coil.compose.LocalImageLoader
 
@@ -24,14 +25,15 @@ fun HtmlContent(
     htmlContent: String,
     modifier: Modifier = Modifier,
     fontSize: Int = 15,
-    lineHeight: Int = 20
+    lineHeight: Int = 20,
+    onImageClick: ((String) -> Unit)? = null
 ) {
     val doc = Jsoup.parse(htmlContent)
     val body = doc.body()
     
     Column(modifier = modifier) {
         body.childNodes().forEach { node ->
-            RenderNode(node, fontSize, lineHeight)
+            RenderNode(node, fontSize, lineHeight, onImageClick)
         }
     }
 }
@@ -40,7 +42,8 @@ fun HtmlContent(
 fun RenderNode(
     node: Node,
     fontSize: Int,
-    lineHeight: Int
+    lineHeight: Int,
+    onImageClick: ((String) -> Unit)? = null
 ) {
     when (node) {
         is TextNode -> {
@@ -79,7 +82,14 @@ fun RenderNode(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Color.White)
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 4.dp)
+                                .let { modifier ->
+                                    if (onImageClick != null) {
+                                        modifier.clickable { onImageClick(fullImageUrl) }
+                                    } else {
+                                        modifier
+                                    }
+                                },
                             contentAlignment = Alignment.CenterStart
                         ) {
                             AsyncImage(
@@ -101,7 +111,7 @@ fun RenderNode(
                 "p", "div" -> {
                     Column {
                         node.childNodes().forEach { childNode ->
-                            RenderNode(childNode, fontSize, lineHeight)
+                            RenderNode(childNode, fontSize, lineHeight, onImageClick)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -144,7 +154,7 @@ fun RenderNode(
                 else -> {
                     // 기타 태그는 내부 콘텐츠만 렌더링
                     node.childNodes().forEach { childNode ->
-                        RenderNode(childNode, fontSize, lineHeight)
+                        RenderNode(childNode, fontSize, lineHeight, onImageClick)
                     }
                 }
             }

@@ -35,13 +35,11 @@ fun Modifier.swipeBackGesture(
 //            Log.d("SwipeGesture", "onDrag - position: (${change.position.x}, ${change.position.y}), " +
 //                    "delta: ($deltaX, $deltaY), dragAmount: $dragAmount, hasTriggered: $hasTriggered")
             
-            // 수평 이동이 수직 이동보다 크고,
-            // 왼쪽 가장자리에서 시작했으며,
-            // 오른쪽으로 100픽셀 이상 이동했을 때
+            // 오른쪽으로 100픽셀 이상 이동하고,
+            // 수직 이동이 수평 이동의 1.5배를 넘지 않을 때 (대각선 허용)
             if (!hasTriggered &&
-                abs(deltaX) > abs(deltaY) && 
-                //startX < 300f &&
-                deltaX > 150f) {
+                deltaX > 100f &&
+                abs(deltaY) < abs(deltaX) * 1.5f) {
                 Log.d("SwipeGesture", "Swipe back triggered! deltaX: $deltaX, startX: $startX")
                 hasTriggered = true
                 onSwipeBack()

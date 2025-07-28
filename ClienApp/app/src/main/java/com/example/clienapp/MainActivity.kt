@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -35,17 +36,35 @@ import androidx.navigation.compose.rememberNavController
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.util.Log
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.graphicsLayer
 
 data class MenuItem(
     val title: String,
@@ -85,6 +104,13 @@ data class PostDetail(
     val nextPageUrl: String? = null
 )
 
+data class LoginResult(
+    val success: Boolean,
+    val message: String,
+    val sessionCookies: List<String> = emptyList(),
+    val userInfo: String = ""
+)
+
 class ClienRepository {
     private val allowedBoards = listOf(
         "모두의공원",
@@ -97,6 +123,257 @@ class ClienRepository {
         "회원중고장터",
         "강좌/사용기"
     )
+    
+    suspend fun analyzeLoginPage(): String = withContext(Dispatchers.IO) {
+        try {
+            val fullUrl = "https://m.clien.net/service/auth/login"
+            NetworkLogger.logDebug("ClienApp", "Analyzing login page: $fullUrl")
+            
+            val client = SSLHelper.getUnsafeOkHttpClient()
+            val request = Request.Builder()
+                .url(fullUrl)
+                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                .build()
+            
+            val response = client.newCall(request).execute()
+            val html = response.body?.string() ?: ""
+            val doc = Jsoup.parse(html, fullUrl)
+            
+            // 로그인 폼 분석
+            val forms = doc.select("form")
+            val loginForm = forms.find { form -> 
+                form.attr("action").contains("login") || 
+                form.select("input[type=password]").isNotEmpty()
+            }
+            
+            val analysis = StringBuilder()
+            analysis.appendLine("=== 로그인 페이지 분석 ===")
+            analysis.appendLine("URL: $fullUrl")
+            analysis.appendLine("Response Code: ${response.code}")
+            analysis.appendLine("Content-Length: ${html.length}")
+            analysis.appendLine()
+            
+            if (loginForm != null) {
+                analysis.appendLine("=== 로그인 폼 정보 ===")
+                analysis.appendLine("Action: ${loginForm.attr("action")}")
+                analysis.appendLine("Method: ${loginForm.attr("method").ifEmpty { "GET" }}")
+                analysis.appendLine("Class: ${loginForm.attr("class")}")
+                analysis.appendLine("ID: ${loginForm.attr("id")}")
+                analysis.appendLine()
+                
+                analysis.appendLine("=== 입력 필드 ===")
+                loginForm.select("input").forEach { input ->
+                    analysis.appendLine("Name: ${input.attr("name")}")
+                    analysis.appendLine("Type: ${input.attr("type")}")
+                    analysis.appendLine("Value: ${input.attr("value")}")
+                    analysis.appendLine("Required: ${input.hasAttr("required")}")
+                    analysis.appendLine("Placeholder: ${input.attr("placeholder")}")
+                    analysis.appendLine("Class: ${input.attr("class")}")
+                    analysis.appendLine("---")
+                }
+                
+                // 토큰이나 hidden 필드 찾기
+                analysis.appendLine("=== Hidden/Token 필드 ===")
+                loginForm.select("input[type=hidden]").forEach { input ->
+                    analysis.appendLine("${input.attr("name")}: ${input.attr("value")}")
+                }
+                
+                // CSRF 토큰 등 메타 태그 확인
+                analysis.appendLine("=== 메타 정보 ===")
+                doc.select("meta[name*=token], meta[name*=csrf]").forEach { meta ->
+                    analysis.appendLine("${meta.attr("name")}: ${meta.attr("content")}")
+                }
+            } else {
+                analysis.appendLine("로그인 폼을 찾을 수 없습니다.")
+                analysis.appendLine("전체 폼 목록:")
+                forms.forEach { form ->
+                    analysis.appendLine("Form Action: ${form.attr("action")}")
+                    analysis.appendLine("Form Method: ${form.attr("method")}")
+                    analysis.appendLine("Form Inputs: ${form.select("input").map { it.attr("name") }}")
+                    analysis.appendLine("---")
+                }
+            }
+            
+            // 쿠키 정보
+            analysis.appendLine("=== 쿠키 정보 ===")
+            response.headers.values("Set-Cookie").forEach { cookie ->
+                analysis.appendLine(cookie)
+            }
+            
+            // 페이지 제목과 기본 정보
+            analysis.appendLine("=== 페이지 정보 ===")
+            analysis.appendLine("Title: ${doc.title()}")
+            
+            Log.d("ClienApp-LoginAnalysis", analysis.toString())
+            analysis.toString()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            "Error analyzing login page: ${e.message}"
+        }
+    }
+    
+    suspend fun performLogin(username: String, password: String): LoginResult = withContext(Dispatchers.IO) {
+        try {
+            // 1단계: 로그인 페이지에서 필요한 정보 가져오기
+            val loginPageUrl = "https://m.clien.net/service/auth/login"
+            val client = SSLHelper.getUnsafeOkHttpClient()
+            
+            val loginPageRequest = Request.Builder()
+                .url(loginPageUrl)
+                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                .build()
+            
+            val loginPageResponse = client.newCall(loginPageRequest).execute()
+            val loginPageHtml = loginPageResponse.body?.string() ?: ""
+            val loginPageDoc = Jsoup.parse(loginPageHtml, loginPageUrl)
+            
+            // 쿠키 저장
+            val cookies = loginPageResponse.headers.values("Set-Cookie")
+            Log.d("ClienApp-Login", "Initial cookies: $cookies")
+            
+            // 로그인 폼 찾기
+            val loginForm = loginPageDoc.select("form").find { form -> 
+                form.attr("action").contains("login") || 
+                form.select("input[type=password]").isNotEmpty()
+            }
+            
+            if (loginForm == null) {
+                return@withContext LoginResult(false, "로그인 폼을 찾을 수 없습니다.")
+            }
+            
+            val formAction = loginForm.attr("action")
+            val loginUrl = if (formAction.startsWith("http")) {
+                formAction
+            } else {
+                "https://m.clien.net$formAction"
+            }
+            
+            // Hidden 필드들 수집
+            val hiddenFields = mutableMapOf<String, String>()
+            loginForm.select("input[type=hidden]").forEach { input ->
+                hiddenFields[input.attr("name")] = input.attr("value")
+            }
+            
+            // 사용자명과 비밀번호 필드명 찾기
+            val usernameField = loginForm.select("input[type=text], input[type=email]").first()?.attr("name") ?: "userId"
+            val passwordField = loginForm.select("input[type=password]").first()?.attr("name") ?: "userPassword"
+            
+            Log.d("ClienApp-Login", "Login URL: $loginUrl")
+            Log.d("ClienApp-Login", "Username field: $usernameField")
+            Log.d("ClienApp-Login", "Password field: $passwordField")
+            Log.d("ClienApp-Login", "Hidden fields: $hiddenFields")
+            
+            // 2단계: 로그인 요청 보내기
+            val formDataBuilder = StringBuilder()
+            
+            // Hidden 필드들 추가
+            hiddenFields.forEach { (name, value) ->
+                if (formDataBuilder.isNotEmpty()) formDataBuilder.append("&")
+                formDataBuilder.append("${java.net.URLEncoder.encode(name, "UTF-8")}=${java.net.URLEncoder.encode(value, "UTF-8")}")
+            }
+            
+            // 사용자 입력 추가
+            if (formDataBuilder.isNotEmpty()) formDataBuilder.append("&")
+            formDataBuilder.append("${java.net.URLEncoder.encode(usernameField, "UTF-8")}=${java.net.URLEncoder.encode(username, "UTF-8")}")
+            formDataBuilder.append("&${java.net.URLEncoder.encode(passwordField, "UTF-8")}=${java.net.URLEncoder.encode(password, "UTF-8")}")
+            
+            val formData = formDataBuilder.toString()
+            Log.d("ClienApp-Login", "Form data: $formData")
+            
+            val cookieHeader = cookies.joinToString("; ") { cookie ->
+                cookie.split(";")[0]
+            }
+            
+            val loginRequest = Request.Builder()
+                .url(loginUrl)
+                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                .addHeader("Referer", loginPageUrl)
+                .apply {
+                    if (cookieHeader.isNotEmpty()) {
+                        addHeader("Cookie", cookieHeader)
+                    }
+                }
+                .post(okhttp3.RequestBody.create(
+                    "application/x-www-form-urlencoded".toMediaType(),
+                    formData
+                ))
+                .build()
+            
+            val loginResponse = client.newCall(loginRequest).execute()
+            val loginResponseHtml = loginResponse.body?.string() ?: ""
+            val responseCookies = loginResponse.headers.values("Set-Cookie")
+            
+            Log.d("ClienApp-Login", "Login response code: ${loginResponse.code}")
+            Log.d("ClienApp-Login", "Login response cookies: $responseCookies")
+            Log.d("ClienApp-Login", "Login response location: ${loginResponse.header("Location")}")
+            
+            // 3단계: 로그인 성공 여부 확인
+            val isSuccess = when {
+                loginResponse.code == 302 || loginResponse.code == 301 -> {
+                    val location = loginResponse.header("Location")
+                    location != null && !location.contains("login") && !location.contains("error")
+                }
+                loginResponse.code == 200 -> {
+                    val responseDoc = Jsoup.parse(loginResponseHtml)
+                    // 에러 메시지가 없고, 로그인 후 페이지 요소들이 있는지 확인
+                    val hasError = responseDoc.select(".error, .alert-danger, [class*=error]").isNotEmpty()
+                    val hasLoginForm = responseDoc.select("input[type=password]").isNotEmpty()
+                    !hasError && !hasLoginForm
+                }
+                else -> false
+            }
+            
+            if (isSuccess) {
+                // 사용자 정보 추출 시도
+                val userInfo = try {
+                    if (loginResponse.code in 300..399) {
+                        // 리다이렉트된 페이지에서 사용자 정보 가져오기
+                        val redirectUrl = loginResponse.header("Location") ?: "https://m.clien.net"
+                        val userPageRequest = Request.Builder()
+                            .url(if (redirectUrl.startsWith("http")) redirectUrl else "https://m.clien.net$redirectUrl")
+                            .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
+                            .addHeader("Cookie", (cookies + responseCookies).joinToString("; ") { it.split(";")[0] })
+                            .build()
+                        
+                        val userPageResponse = client.newCall(userPageRequest).execute()
+                        val userPageHtml = userPageResponse.body?.string() ?: ""
+                        val userPageDoc = Jsoup.parse(userPageHtml)
+                        
+                        // 사용자명 추출
+                        userPageDoc.select(".username, .user-name, .nickname, [class*=user]").text().takeIf { it.isNotEmpty() } ?: username
+                    } else {
+                        username
+                    }
+                } catch (e: Exception) {
+                    username
+                }
+                
+                LoginResult(
+                    success = true,
+                    message = "로그인 성공",
+                    sessionCookies = cookies + responseCookies,
+                    userInfo = userInfo
+                )
+            } else {
+                // 에러 메시지 추출
+                val errorMessage = try {
+                    val responseDoc = Jsoup.parse(loginResponseHtml)
+                    responseDoc.select(".error, .alert-danger, [class*=error]").text().takeIf { it.isNotEmpty() }
+                        ?: "로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요."
+                } catch (e: Exception) {
+                    "로그인 처리 중 오류가 발생했습니다."
+                }
+                
+                LoginResult(false, errorMessage)
+            }
+            
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Log.e("ClienApp-Login", "Login error: ${e.message}")
+            LoginResult(false, "로그인 중 오류가 발생했습니다: ${e.message}")
+        }
+    }
 
     suspend fun fetchMenuItems(): List<MenuItem> = withContext(Dispatchers.IO) {
         // 캐시 확인
@@ -161,10 +438,23 @@ class ClienRepository {
             NetworkLogger.logDebug("ClienApp", "Fetching posts from: $fullUrl (page: $page)")
             
             val client = SSLHelper.getUnsafeOkHttpClient()
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(fullUrl)
                 .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
-                .build()
+            
+            // 로그인된 상태면 세션 쿠키 추가
+            if (SessionManager.isLoggedIn()) {
+                val sessionCookies = SessionManager.getSessionCookies()
+                if (sessionCookies.isNotEmpty()) {
+                    val cookieHeader = sessionCookies.joinToString("; ") { cookie ->
+                        cookie.split(";")[0]
+                    }
+                    requestBuilder.addHeader("Cookie", cookieHeader)
+                    NetworkLogger.logDebug("ClienApp", "Using session cookies for authenticated request")
+                }
+            }
+            
+            val request = requestBuilder.build()
             
             val response = client.newCall(request).execute()
             val html = response.body?.string() ?: ""
@@ -250,10 +540,23 @@ class ClienRepository {
             NetworkLogger.logDebug("ClienApp", "Fetching post detail from: $fullUrl")
             
             val client = SSLHelper.getUnsafeOkHttpClient()
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(fullUrl)
                 .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36")
-                .build()
+            
+            // 로그인된 상태면 세션 쿠키 추가
+            if (SessionManager.isLoggedIn()) {
+                val sessionCookies = SessionManager.getSessionCookies()
+                if (sessionCookies.isNotEmpty()) {
+                    val cookieHeader = sessionCookies.joinToString("; ") { cookie ->
+                        cookie.split(";")[0]
+                    }
+                    requestBuilder.addHeader("Cookie", cookieHeader)
+                    NetworkLogger.logDebug("ClienApp", "Using session cookies for authenticated post detail request")
+                }
+            }
+            
+            val request = requestBuilder.build()
             
             val response = client.newCall(request).execute()
             val html = response.body?.string() ?: ""
@@ -581,6 +884,7 @@ fun isValidCommentContent(content: String): Boolean {
 fun ClienApp() {
     val navController = rememberNavController()
     val context = LocalContext.current
+    var refreshTrigger by remember { mutableStateOf(0) }
     
     // Coil ImageLoader with unsafe SSL settings
     val imageLoader = ImageLoader.Builder(context)
@@ -589,16 +893,39 @@ fun ClienApp() {
     
     CompositionLocalProvider(LocalImageLoader provides imageLoader) {
         NavHost(navController = navController, startDestination = "boardList") {
-        composable(
-            "boardList",
-            enterTransition = { slideInHorizontally(animationSpec = tween(0)) },
-            exitTransition = { slideOutHorizontally(animationSpec = tween(0)) },
-            popEnterTransition = { slideInHorizontally(animationSpec = tween(0)) },
-            popExitTransition = { slideOutHorizontally(animationSpec = tween(0)) }
-        ) {
-            BoardListScreen()
+            composable(
+                "boardList",
+                enterTransition = { slideInHorizontally(animationSpec = tween(0)) },
+                exitTransition = { slideOutHorizontally(animationSpec = tween(0)) },
+                popEnterTransition = { slideInHorizontally(animationSpec = tween(0)) },
+                popExitTransition = { slideOutHorizontally(animationSpec = tween(0)) }
+            ) {
+                BoardListScreen(
+                    onNavigateToLogin = {
+                        navController.navigate("login")
+                    },
+                    refreshTrigger = refreshTrigger
+                )
+            }
+            
+            composable(
+                "login",
+                enterTransition = { slideInHorizontally(animationSpec = tween(300)) { it } },
+                exitTransition = { slideOutHorizontally(animationSpec = tween(300)) { it } },
+                popEnterTransition = { slideInHorizontally(animationSpec = tween(300)) { -it } },
+                popExitTransition = { slideOutHorizontally(animationSpec = tween(300)) { -it } }
+            ) {
+                LoginScreen(
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    onLoginSuccess = { userInfo ->
+                        navController.popBackStack()
+                        refreshTrigger++
+                    }
+                )
+            }
         }
-    }
     }
 }
 
@@ -608,11 +935,17 @@ fun ClienApp() {
 // 첫화면
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BoardListScreen() {
+fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
     var menuItems by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isLoggedIn by remember { mutableStateOf(SessionManager.isLoggedIn()) }
     val repository = remember { ClienRepository() }
     val scope = rememberCoroutineScope()
+    
+    // refreshTrigger가 변경되면 로그인 상태 다시 확인
+    LaunchedEffect(refreshTrigger) {
+        isLoggedIn = SessionManager.isLoggedIn()
+    }
     
     LaunchedEffect(Unit) {
         scope.launch {
@@ -626,7 +959,31 @@ fun BoardListScreen() {
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("Clien 게시판") }
+                    title = { Text("Clien 게시판") },
+                    actions = {
+                        if (isLoggedIn) {
+                            Row {
+                                Text(
+                                    text = SessionManager.getUserInfo().takeIf { it.isNotEmpty() } ?: SessionManager.getUsername(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.align(Alignment.CenterVertically),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                IconButton(
+                                    onClick = {
+                                        SessionManager.logout()
+                                        isLoggedIn = false
+                                    }
+                                ) {
+                                    Icon(Icons.Filled.Person, contentDescription = "로그아웃", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        } else {
+                            IconButton(onClick = onNavigateToLogin) {
+                                Icon(Icons.Filled.Person, contentDescription = "로그인")
+                            }
+                        }
+                    }
                 )
                 Divider(thickness = 2.dp, color = Color.Black)
             }
@@ -686,6 +1043,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
     var postDetail by remember { mutableStateOf<PostDetail?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
+    var selectedImageUrl by remember { mutableStateOf<String?>(null) }
     val repository = remember { ClienRepository() }
     val scope = rememberCoroutineScope()
     val swipeRefreshState = rememberSwipeRefreshState(isRefreshing)
@@ -725,7 +1083,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                     title = { Text(postTitle, maxLines = 1) },
                     navigationIcon = {
                         IconButton(onClick = { onBack() }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "뒤로가기")
                         }
                     }
                 )
@@ -819,7 +1177,8 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                     HtmlContent(
                         htmlContent = postDetail!!.htmlContent,
                         fontSize = 15,
-                        lineHeight = 20
+                        lineHeight = 20,
+                        onImageClick = { imageUrl -> selectedImageUrl = imageUrl }
                     )
                 } else {
                     LinkifyText(
@@ -895,10 +1254,103 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
             }
         }
     }
+    
+    // 이미지 확대 모달
+    selectedImageUrl?.let { imageUrl ->
+        ImageViewer(
+            imageUrl = imageUrl,
+            onDismiss = { selectedImageUrl = null }
+        )
+    }
+}
+
+@Composable
+fun ImageViewer(
+    imageUrl: String,
+    onDismiss: () -> Unit
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+    
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp
+    val screenHeight = configuration.screenHeightDp
+    
+    val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
+        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
+        
+        val maxX = (screenWidth * scale - screenWidth) / 2
+        val maxY = (screenHeight * scale - screenHeight) / 2
+        
+        offsetX = (offsetX + offsetChange.x).coerceIn(-maxX, maxX)
+        offsetY = (offsetY + offsetChange.y).coerceIn(-maxY, maxY)
+    }
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.9f))
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            scale = if (scale > 1.5f) 1f else 2f
+                            offsetX = 0f
+                            offsetY = 0f
+                        },
+                        onTap = { onDismiss() }
+                    )
+                }
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = "확대된 이미지",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offsetX,
+                        translationY = offsetY
+                    )
+                    .transformable(state = transformableState),
+                contentScale = ContentScale.Fit
+            )
+            
+            // 닫기 버튼
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .background(
+                        Color.Black.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+            ) {
+                Icon(
+                    Icons.Filled.ArrowBack,
+                    contentDescription = "닫기",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
 }
 
 @Composable
 fun CommentItem(comment: Comment) {
+    var selectedImageUrl by remember { mutableStateOf<String?>(null) }
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -931,7 +1383,8 @@ fun CommentItem(comment: Comment) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = 4.dp)
+                        .clickable { selectedImageUrl = imageUrl },
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     AsyncImage(
@@ -946,6 +1399,14 @@ fun CommentItem(comment: Comment) {
                 }
             }
         }
+    }
+    
+    // 이미지 확대 모달
+    selectedImageUrl?.let { imageUrl ->
+        ImageViewer(
+            imageUrl = imageUrl,
+            onDismiss = { selectedImageUrl = null }
+        )
     }
 }
 
@@ -1054,12 +1515,216 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LoginScreen(onBack: () -> Unit, onLoginSuccess: (String) -> Unit) {
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    var loginMessage by remember { mutableStateOf("") }
+    var isAnalyzing by remember { mutableStateOf(false) }
+    var analysisResult by remember { mutableStateOf("") }
+    
+    val repository = remember { ClienRepository() }
+    val scope = rememberCoroutineScope()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("로그인") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "뒤로가기")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 로그인 폼
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Clien 계정으로 로그인",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = { Text("아이디") },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Person, contentDescription = null)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isLoading,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                    )
+                    
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("비밀번호") },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            TextButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Text(
+                                    text = if (passwordVisible) "숨기기" else "보기",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isLoading,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    )
+                    
+                    if (loginMessage.isNotEmpty()) {
+                        Text(
+                            text = loginMessage,
+                            color = if (loginMessage.contains("성공")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    isLoading = true
+                                    loginMessage = "로그인 중..."
+                                    
+                                    val result = repository.performLogin(username, password)
+                                    
+                                    loginMessage = result.message
+                                    isLoading = false
+                                    
+                                    if (result.success) {
+                                        // 세션 정보 저장
+                                        SessionManager.saveLoginSession(
+                                            username = username,
+                                            userInfo = result.userInfo,
+                                            sessionCookies = result.sessionCookies
+                                        )
+                                        onLoginSuccess(result.userInfo)
+                                    }
+                                }
+                            },
+                            enabled = !isLoading && username.isNotEmpty() && password.isNotEmpty(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("로그인")
+                            }
+                        }
+                        
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    isAnalyzing = true
+                                    analysisResult = repository.analyzeLoginPage()
+                                    isAnalyzing = false
+                                }
+                            },
+                            enabled = !isAnalyzing,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (isAnalyzing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("페이지 분석")
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 분석 결과 표시
+            if (analysisResult.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "로그인 페이지 분석 결과",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = analysisResult,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+            
+            // 도움말
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "로그인 안내",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "• Clien 웹사이트와 동일한 계정 정보를 사용하세요.\n" +
+                              "• 로그인 후에는 회원 전용 게시판에 접근할 수 있습니다.\n" +
+                              "• '페이지 분석' 버튼으로 로그인 폼 구조를 확인할 수 있습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         // 방문한 글 관리자 초기화
         VisitedPostsManager.init(this)
+        
+        // 세션 관리자 초기화
+        SessionManager.init(this)
         
         // Coil 기본 이미지 로더 설정
         val imageLoader = ImageLoader.Builder(this)

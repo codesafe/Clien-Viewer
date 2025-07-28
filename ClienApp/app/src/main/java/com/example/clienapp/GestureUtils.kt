@@ -36,7 +36,8 @@ fun Modifier.smartSwipeBack(onBack: () -> Unit): Modifier {
 
                     if (dragAxis == DragAxis.None) {
                         if (abs(dragAmount.x) > viewConfiguration.touchSlop || abs(dragAmount.y) > viewConfiguration.touchSlop) {
-                            dragAxis = if (abs(dragAmount.x) > abs(dragAmount.y)) DragAxis.Horizontal else DragAxis.Vertical
+                            // 대각선 허용: 수직 이동이 수평 이동의 1.5배를 넘지 않으면 수평으로 처리
+                            dragAxis = if (abs(dragAmount.y) < abs(dragAmount.x) * 1.5f) DragAxis.Horizontal else DragAxis.Vertical
                         }
                     }
 
