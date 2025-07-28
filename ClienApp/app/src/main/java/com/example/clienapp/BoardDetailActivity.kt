@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
+
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
 import androidx.compose.runtime.CompositionLocalProvider
@@ -76,7 +77,7 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                 isLoading = true
                 posts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = false)
                 currentPage = 0
-                hasMorePages = posts.size >= 20
+                hasMorePages = true
                 isLoading = false
             }
         }
@@ -89,7 +90,7 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                 val newPosts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = true)
                 posts = newPosts
                 currentPage = 0
-                hasMorePages = newPosts.size >= 20
+                hasMorePages = true
                 isRefreshing = false
             }
         }
@@ -118,7 +119,7 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                         if (morePosts.isNotEmpty()) {
                             posts = posts + morePosts
                             currentPage = nextPage
-                            hasMorePages = morePosts.size >= 20
+                            hasMorePages = true
                             Log.d("ClienApp", "Loaded ${morePosts.size} posts from page $nextPage, total: ${posts.size}")
                         } else {
                             hasMorePages = false
@@ -167,7 +168,7 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(posts.size) { index ->

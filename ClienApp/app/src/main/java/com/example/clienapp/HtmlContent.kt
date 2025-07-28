@@ -1,9 +1,13 @@
 package com.example.clienapp
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -12,8 +16,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
-import androidx.compose.ui.platform.LocalContext
-import coil.ImageLoader
+
 import coil.compose.LocalImageLoader
 
 @Composable
@@ -72,17 +75,18 @@ fun RenderNode(
                         NetworkLogger.logDebug("HtmlContent", "Loading image: $fullImageUrl")
                         
                         Spacer(modifier = Modifier.height(8.dp))
-                        Card(
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .background(Color.White)
                                 .padding(vertical = 4.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            contentAlignment = Alignment.CenterStart
                         ) {
                             AsyncImage(
                                 model = fullImageUrl,
                                 contentDescription = "글 이미지",
-                                modifier = Modifier.fillMaxWidth(),
-                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier.wrapContentWidth(),
+                                contentScale = ContentScale.Inside,
                                 onError = { error ->
                                     NetworkLogger.logError("HtmlContent", "Image load failed: $fullImageUrl", error.result.throwable)
                                 },

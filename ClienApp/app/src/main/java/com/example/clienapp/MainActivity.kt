@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.alpha
+
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.google.accompanist.swiperefresh.SwipeRefresh
@@ -80,7 +80,8 @@ data class PostDetail(
     val date: String = "",
     val views: String = "",
     val comments: List<Comment> = emptyList(),
-    val sourceUrl: String = ""
+    val sourceUrl: String = "",
+    val nextPageUrl: String? = null
 )
 
 class ClienRepository {
@@ -215,12 +216,7 @@ class ClienRepository {
                 Log.d("ClienApp", "Post: ${post.title}")
             }
             
-            // 첫 페이지에서만 처음 2개 게시글(공지사항) 제외
-            val postsWithoutNotice = if (page == 0 && posts.size > 2) {
-                posts.drop(2)
-            } else {
-                posts
-            }
+            val postsWithoutNotice = posts
             
             Log.d("ClienApp", "Posts after removing notices: ${postsWithoutNotice.size}")
             
@@ -492,6 +488,8 @@ class ClienRepository {
             
             NetworkLogger.logDebug("ClienApp", "Found ${comments.size} comments total")
             
+            val nextPageUrl = doc.select("a.button-next").first()?.attr("href")
+
             val postDetail = PostDetail(
                 title = title,
                 content = content,
@@ -502,7 +500,8 @@ class ClienRepository {
                 date = date,
                 views = views,
                 comments = comments,
-                sourceUrl = sourceUrl
+                sourceUrl = sourceUrl,
+                nextPageUrl = nextPageUrl
             )
             
             // 캐시에 저장
@@ -765,7 +764,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(16.dp)
+                            .padding(8.dp)
                     ) {
                 // 0. 출처 링크 미리보기 (있는 경우 최상단에 표시)
                 if (postDetail!!.sourceUrl.isNotEmpty()) {
@@ -827,6 +826,39 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                 }
                 
                 
+                // 6. 다음 페이지 버튼
+                postDetail?.nextPageUrl?.let {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    var isLoadingNextPage by remember { mutableStateOf(false) }
+
+                    Button(
+                        onClick = {
+                            if (!isLoadingNextPage) {
+                                scope.launch {
+                                    isLoadingNextPage = true
+                                    val nextPageDetail = repository.fetchPostDetail(it)
+                                    if (nextPageDetail != null) {
+                                        postDetail = postDetail?.copy(
+                                            htmlContent = postDetail!!.htmlContent + "<br><br>" + nextPageDetail.htmlContent,
+                                            comments = postDetail!!.comments + nextPageDetail.comments,
+                                            nextPageUrl = nextPageDetail.nextPageUrl
+                                        )
+                                    }
+                                    isLoadingNextPage = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isLoadingNextPage
+                    ) {
+                        if (isLoadingNextPage) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        } else {
+                            Text("다음 페이지")
+                        }
+                    }
+                }
+
                 // 내용 끝 가로 라인
                 Divider(
                     modifier = Modifier.padding(vertical = 12.dp),
@@ -972,7 +1004,7 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
                     Text(
                         text = post.likes.toString(),
                         style = MaterialTheme.typography.labelSmall,
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onError,
                         fontWeight = FontWeight.Bold
                     )
@@ -983,7 +1015,7 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
             Text(
                 text = post.title,
                 style = MaterialTheme.typography.bodySmall,
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 maxLines = 2,
                 color = titleColor,
                 modifier = Modifier.weight(1f)
@@ -998,7 +1030,7 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
                 Text(
                     text = post.author,
                     style = MaterialTheme.typography.bodySmall,
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary // 파란색으로 변경
                 )
             }
@@ -1006,7 +1038,7 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
                 Text(
                     text = post.date,
                     style = MaterialTheme.typography.bodySmall,
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     color = metaColor
                 )
             }
