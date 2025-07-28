@@ -59,7 +59,8 @@ data class PostItem(
     val author: String = "",
     val date: String = "",
     val views: String = "",
-    val likes: Int = 0
+    val likes: Int = 0,
+    val isNotice: Boolean = false
 )
 
 data class Comment(
@@ -195,6 +196,8 @@ class ClienRepository {
                     title = matchResult.groupValues[2].trim()
                 }
                 
+                val isNotice = element.select("div.notice").isNotEmpty()
+
                 if (title.isNotEmpty() && url.isNotEmpty()) {
                     posts.add(PostItem(
                         title = title,
@@ -202,7 +205,8 @@ class ClienRepository {
                         author = element.select(".author, .nickname, .writer").text().trim(),
                         date = element.select(".date, .time, .timestamp").text().trim(),
                         views = element.select(".hit, .view, .count").text().trim(),
-                        likes = likes
+                        likes = likes,
+                        isNotice = isNotice
                     ))
                     
                     if (likes > 0) {
@@ -974,9 +978,13 @@ fun MenuItemCard(item: MenuItem, onClick: () -> Unit) {
 
 @Composable
 fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
-    val backgroundColor = if (isVisited) Color(0xFFF0F0F0) else Color.White
-    val titleColor = if (isVisited) Color.DarkGray else Color.Black
-    val metaColor = if (isVisited) Color.Gray else Color.DarkGray
+    val backgroundColor = when {
+        post.isNotice -> Color(0xFFE0E0E0) // 공지글 배경색
+        isVisited -> Color(0xFFF0F0F0)
+        else -> Color.White
+    }
+    val titleColor = if (isVisited && !post.isNotice) Color.DarkGray else Color.Black
+    val metaColor = if (isVisited && !post.isNotice) Color.Gray else Color.DarkGray
 
     Column(
         modifier = Modifier

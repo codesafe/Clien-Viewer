@@ -176,8 +176,10 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                         val currentIsVisited = VisitedPostsManager.isVisited(post.url)
 
                         PostItemCard(post, currentIsVisited) {
-                            // Mark as visited immediately
-                            VisitedPostsManager.markAsVisited(post.url)
+                            if (!post.isNotice) {
+                                // Mark as visited immediately
+                                VisitedPostsManager.markAsVisited(post.url)
+                            }
 
                             val encodedUrl = UrlUtils.encodeUrl(post.url)
                             val encodedTitle = UrlUtils.encodeUrl(post.title)
