@@ -1,0 +1,23 @@
+nickname는 author에 글씨가 표시
+<div class="comment_row  " data-role="comment-row" data-author-id="manstein" data-comment-sn="150213368">
+	<div class="comment_info">
+		<div class="post_contact" data-role="comment-post-contact">
+		<span class="contact_name">
+			<span class="nickname">지나가던이</span>
+		</span>
+		</div>
+	</div>
+</div>
+
+nickimg는 author에 이미지가 표시
+<div class="comment_row  " data-role="comment-row" data-author-id="kissangel" data-comment-sn="150213400">
+	<div class="comment_info">
+		<div class="post_contact" data-role="comment-post-contact">
+		<span class="contact_name">
+			<span class="nickimg"><img src="https://edgio.clien.net/F94/7161308/c66f3ac81c150.gif" alt="어머"/></span>
+		</span>
+		</div>
+	</div>
+</div>
+
+

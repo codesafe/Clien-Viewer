@@ -78,6 +78,7 @@ dependencies {
     
     // 이미지 로딩
     implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("io.coil-kt:coil-gif:2.5.0")
     
     // SwipeRefresh
     implementation("com.google.accompanist:accompanist-swiperefresh:0.32.0")

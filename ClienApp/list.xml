@@ -1,0 +1,29 @@
+
+nickimg는 author에 이미지가 표시
+<div class="list_infomation">
+<div class="list_number">
+<div class="list_time">
+<span>09:19</span>
+</div>
+<div class="list_hit"><span>2007</span></div>
+</div>
+<div class="list_author" data-role="list-author">
+<span class="memo none" data-role="list_memo"></span>
+<span class="nickimg"><img src="https://edgio.clien.net/F94/1091337/45b921239656460685a.gif" alt="만기"/></span>
+</div>
+</div>
+
+
+nickname는 author에 글씨가 표시
+<div class="list_infomation">
+<div class="list_number">
+<div class="list_time">
+<span>09:18</span>
+</div>
+<div class="list_hit"><span>773</span></div>
+</div>
+<div class="list_author" data-role="list-author">
+<span class="memo none" data-role="list_memo"></span>
+<span class="nickname">불달걀튀김</span>
+</div>
+</div>				

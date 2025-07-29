@@ -1,0 +1,74 @@
+
+
+<div class="content_view">
+
+		// 제목
+		<div class="post_title">
+			<div class="post_subject" data-role="cut-string" class="break">
+				<span>의대생 증가하면 수업의 질 떨어지고 그 피해는 국민이 받는다며 단체 휴학해놓고..웃기는군요.</span>
+					<a class="post_reply" href="#comment-head">
+						<span>8</span><span class="fa fa-angle-down"></span>
+					</a>
+			</div>
+		</div>
+
+		// 글 작성자
+		<div class="post_view">
+			<div class="post_contact" data-role="post-info">
+				<span class="contact_name">
+				<span class="nickname">투더리씨</span>
+			</div>
+		</div>
+	
+		// 글 내용
+		<div class="post_content">
+			<article>
+			</article>
+		</div>
+		
+		
+		
+		// 댓글시작
+		<div class="post_comment" id="comment-div">
+			<div class="comment inline_link ad_banner " data-role="comment">
+			
+				<div class="comment_info">
+				<div class="post_contact" data-role="comment-post-contact">
+					<span class="contact_name">
+						// 댓글 작성자
+						<span class="nickname">BOBBOB2</span>
+					</span>
+				</div>
+				</div>
+				
+				<div class="comment_content" data-role="comment-content-150193654">
+					// 댓글 내용
+					<div class="comment_view" data-comment-view="150193654">
+						일단 집단휴학이 아니라고 주장했죠 ㅎㅎ 근데 복귀는 집단복귀하네요
+					</div>
+				</div>
+				
+				<div class="comment_row by-author re" data-role="comment-row" data-author-id="mrcomplain" data-comment-sn="150193675">
+				
+					<div class="comment_info">
+						<div class="post_contact" data-role="comment-post-contact">
+							<span class="contact_name">
+							// 대댓글 작성자
+							<span class="nickname">투더리씨</span>
+						</div>
+					</div>					
+				
+					<div class="comment_content" data-role="comment-content-150193675">
+						<div class="comment_view" data-comment-view="150193675">
+						
+							// 대댓글 내용
+							<strong data-nick-id='kelviness' data-role='highlite'>@BOBBOB2</strong>님 앞으로  의료개혁 방안 나오면 그냥 개소리라고 생각하겠습니다.
+						</div>
+					</div>
+				
+				
+				</div>
+		
+			</div>
+		
+		</div>

@@ -51,6 +51,7 @@ import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
+import coil.decode.GifDecoder
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -76,6 +77,7 @@ data class PostItem(
     val title: String,
     val url: String,
     val author: String = "",
+    val authorImageUrl: String = "",
     val date: String = "",
     val views: String = "",
     val likes: Int = 0,
@@ -84,10 +86,13 @@ data class PostItem(
 
 data class Comment(
     val author: String,
+    val authorImageUrl: String = "",
     val content: String,
     val date: String,
     val isReply: Boolean = false,
-    val images: List<String> = emptyList()
+    val images: List<String> = emptyList(),
+    val mentionAuthor: String = "",
+    val mentionAuthorImageUrl: String = ""
 )
 
 data class PostDetail(
@@ -97,6 +102,7 @@ data class PostDetail(
     val images: List<String> = emptyList(),
     val youtubeVideoIds: List<String> = emptyList(),
     val author: String = "",
+    val authorImageUrl: String = "",
     val date: String = "",
     val views: String = "",
     val comments: List<Comment> = emptyList(),
@@ -489,10 +495,34 @@ class ClienRepository {
                 val isNotice = element.select("div.notice").isNotEmpty()
 
                 if (title.isNotEmpty() && url.isNotEmpty()) {
+                    // Author 정보 파싱 - nickname과 nickimg 구분
+                    var author = ""
+                    var authorImageUrl = ""
+                    
+                    // nickimg 클래스 확인 (이미지)
+                    val nickimgElement = element.select(".nickimg img").first()
+                    if (nickimgElement != null) {
+                        authorImageUrl = nickimgElement.attr("src")
+                        if (!authorImageUrl.startsWith("http")) {
+                            authorImageUrl = if (authorImageUrl.startsWith("//")) {
+                                "https:$authorImageUrl"
+                            } else if (authorImageUrl.startsWith("/")) {
+                                "https://m.clien.net$authorImageUrl"
+                            } else {
+                                "https://m.clien.net/$authorImageUrl"
+                            }
+                        }
+                        author = nickimgElement.attr("alt").trim().takeIf { it.isNotEmpty() } ?: "이미지"
+                    } else {
+                        // nickname 클래스 확인 (텍스트)
+                        author = element.select(".nickname, .author, .writer").text().trim()
+                    }
+                    
                     posts.add(PostItem(
                         title = title,
                         url = if (url.startsWith("http")) url else "https://m.clien.net$url",
-                        author = element.select(".author, .nickname, .writer").text().trim(),
+                        author = author,
+                        authorImageUrl = authorImageUrl,
                         date = element.select(".date, .time, .timestamp").text().trim(),
                         views = element.select(".hit, .view, .count").text().trim(),
                         likes = likes,
@@ -665,21 +695,41 @@ class ClienRepository {
                 }
             }
             
-            // 작성자 파싱 - doc.xml 구조에 맞게
+            // 작성자 파싱 - nickname과 nickimg 구분
             var author = ""
-            val authorElement = doc.select(".post_view .post_contact .nickname").first()
-            if (authorElement != null) {
-                author = authorElement.text().trim()
-                NetworkLogger.logDebug("ClienApp", "Found author: $author")
+            var authorImageUrl = ""
+            
+            // 먼저 nickimg 확인 (이미지)
+            val nickimgElement = doc.select(".post_view .post_contact .nickimg img, .post_author .nickimg img, .nickimg img").first()
+            if (nickimgElement != null) {
+                authorImageUrl = nickimgElement.attr("src")
+                if (!authorImageUrl.startsWith("http")) {
+                    authorImageUrl = if (authorImageUrl.startsWith("//")) {
+                        "https:$authorImageUrl"
+                    } else if (authorImageUrl.startsWith("/")) {
+                        "https://m.clien.net$authorImageUrl"
+                    } else {
+                        "https://m.clien.net/$authorImageUrl"
+                    }
+                }
+                author = nickimgElement.attr("alt").trim().takeIf { it.isNotEmpty() } ?: "이미지"
+                NetworkLogger.logDebug("ClienApp", "Found author image: $authorImageUrl, alt: $author")
             } else {
-                // 대체 선택자들
-                val authorSelectors = listOf(".post_author", ".author", ".nickname", ".writer", ".user_info .nickname")
-                for (selector in authorSelectors) {
-                    val element = doc.select(selector).first()
-                    if (element != null) {
-                        author = element.text().trim()
-                        NetworkLogger.logDebug("ClienApp", "Found author with fallback selector '$selector': $author")
-                        break
+                // nickname 확인 (텍스트)
+                val authorElement = doc.select(".post_view .post_contact .nickname").first()
+                if (authorElement != null) {
+                    author = authorElement.text().trim()
+                    NetworkLogger.logDebug("ClienApp", "Found author: $author")
+                } else {
+                    // 대체 선택자들
+                    val authorSelectors = listOf(".post_author", ".author", ".nickname", ".writer", ".user_info .nickname")
+                    for (selector in authorSelectors) {
+                        val element = doc.select(selector).first()
+                        if (element != null) {
+                            author = element.text().trim()
+                            NetworkLogger.logDebug("ClienApp", "Found author with fallback selector '$selector': $author")
+                            break
+                        }
                     }
                 }
             }
@@ -705,31 +755,46 @@ class ClienRepository {
             if (commentArea != null) {
                 NetworkLogger.logDebug("ClienApp", "Found comment area")
                 
-                // 모든 댓글 관련 요소 찾기 (더 포괄적인 선택자)
+                // 댓글 요소 찾기 - comment.xml 구조에 맞게 정확한 선택자 사용
                 val allCommentElements = commentArea.select(
-                    ".comment, .comment_row, " +
-                    "[data-role='comment'], [data-role='comment-row'], " +
-                    "li:has(.nickname), div:has(.nickname)"
+                    "[data-role='comment-row']"
                 )
                 
                 NetworkLogger.logDebug("ClienApp", "Found ${allCommentElements.size} potential comment elements")
                 
                 allCommentElements.forEach { element ->
                     try {
-                        // 대댓글인지 확인
-//                        val isReply = element.hasClass("re") ||
-//                                     element.hasClass("reply") ||
-//                                     element.hasClass("comment_row") ||
-//                                     element.parent()?.hasClass("comment") == true
+                        // 대댓글인지 확인 - comment.xml 구조 기준
+                        val isReply = element.hasClass("re") || 
+                                    element.className().contains("re")
 
-                        val isReply = element.hasClass("comment_row  re") ||
-                                    element.hasClass("comment_row by-author re") == true
-
-                        // 작성자 찾기
-                        val authorElement = element.select(".nickname").first()
-                        val author = authorElement?.text()?.trim() ?: ""
+                        // 작성자 찾기 - comment.xml 구조에 맞게 정확한 선택자 사용
+                        var commentAuthor = ""
+                        var commentAuthorImageUrl = ""
                         
-                        if (author.isEmpty()) {
+                        // 먼저 nickimg 확인 (이미지) - 직접 자식 요소만 선택
+                        val commentNickimgElement = element.select(".comment_info > .post_contact .contact_name .nickimg img").first()
+                        if (commentNickimgElement != null) {
+                            commentAuthorImageUrl = commentNickimgElement.attr("src")
+                            if (!commentAuthorImageUrl.startsWith("http")) {
+                                commentAuthorImageUrl = if (commentAuthorImageUrl.startsWith("//")) {
+                                    "https:$commentAuthorImageUrl"
+                                } else if (commentAuthorImageUrl.startsWith("/")) {
+                                    "https://m.clien.net$commentAuthorImageUrl"
+                                } else {
+                                    "https://m.clien.net/$commentAuthorImageUrl"
+                                }
+                            }
+                            commentAuthor = commentNickimgElement.attr("alt").trim().takeIf { it.isNotEmpty() } ?: "이미지"
+                            NetworkLogger.logDebug("ClienApp", "Found comment author image: $commentAuthorImageUrl, alt: $commentAuthor")
+                        } else {
+                            // nickname 확인 (텍스트) - 직접 자식 요소만 선택
+                            val authorElement = element.select(".comment_info > .post_contact .contact_name .nickname").first()
+                            commentAuthor = authorElement?.text()?.trim() ?: ""
+                            NetworkLogger.logDebug("ClienApp", "Found comment author text: $commentAuthor")
+                        }
+                        
+                        if (commentAuthor.isEmpty()) {
                             NetworkLogger.logDebug("ClienApp", "Skipping element - no author found")
                             return@forEach
                         }
@@ -737,14 +802,63 @@ class ClienRepository {
                         // 댓글 내용 찾기 (여러 방법 시도)
                         var content = ""
                         val commentImages = mutableListOf<String>()
+                        var mentionAuthor = ""
+                        var mentionAuthorImageUrl = ""
                         
-                        // 방법 1: .comment_view에서 찾기
-                        val commentViewElement = element.select(".comment_view").first()
+                        // 방법 1: 직접 자식 .comment_view에서 찾기
+                        val commentViewElement = element.select(".comment_content .comment_view").first()
                         if (commentViewElement != null) {
-                            content = cleanCommentContent(commentViewElement.text().trim())
+                            // 언급 정보 추출 - <strong>@<img data-role='highlite'...></strong>님 패턴
+                            val mentionElement = commentViewElement.select("strong img[data-role='highlite']").first()
+                            if (mentionElement != null) {
+                                mentionAuthorImageUrl = mentionElement.attr("src")
+                                if (!mentionAuthorImageUrl.startsWith("http")) {
+                                    mentionAuthorImageUrl = if (mentionAuthorImageUrl.startsWith("//")) {
+                                        "https:$mentionAuthorImageUrl"
+                                    } else if (mentionAuthorImageUrl.startsWith("/")) {
+                                        "https://m.clien.net$mentionAuthorImageUrl"
+                                    } else {
+                                        "https://m.clien.net/$mentionAuthorImageUrl"
+                                    }
+                                }
+                                mentionAuthor = mentionElement.attr("alt").trim()
+                                NetworkLogger.logDebug("ClienApp", "Found mention: $mentionAuthor, image: $mentionAuthorImageUrl")
+                            }
                             
-                            // 댓글 내 이미지 추출 (개선된 로직)
+                            // 원본 텍스트에서 언급 부분 제거
+                            var rawContent = commentViewElement.text().trim()
+                            if (mentionAuthor.isNotEmpty()) {
+                                // @이미지님 또는 author님// 패턴 제거
+                                rawContent = rawContent.replace(Regex("^@.*?님\\s*"), "")
+                                rawContent = rawContent.replace(Regex("^.*?님//\\s*"), "")
+                            }
+                            content = cleanCommentContent(rawContent)
+                            
+                            // 댓글 내 이미지 추출 (author 이미지 완전 제외)
                             commentViewElement.select("img").forEach { img ->
+                                // author 이미지와 언급 이미지 모두 제외
+                                val imgSrc = img.attr("src")
+                                val isHighliteImage = img.hasAttr("data-role") && img.attr("data-role") == "highlite"
+                                val isMentionImage = mentionAuthorImageUrl.isNotEmpty() && imgSrc == mentionAuthorImageUrl
+                                val isAuthorImage = img.parent()?.hasClass("nickimg") == true ||
+                                                  img.hasClass("nickimg") ||
+                                                  img.parent()?.parent()?.hasClass("nickimg") == true ||
+                                                  img.closest(".nickimg") != null ||
+                                                  img.closest(".post_contact") != null ||
+                                                  img.closest(".comment_info") != null ||
+                                                  (commentAuthorImageUrl.isNotEmpty() && imgSrc == commentAuthorImageUrl)
+                                
+                                val shouldExclude = isHighliteImage || isMentionImage || isAuthorImage
+                                
+                                if (shouldExclude) {
+                                    when {
+                                        isAuthorImage -> NetworkLogger.logDebug("ClienApp", "Skipping author image: ${img.attr("src")}")
+                                        isHighliteImage -> NetworkLogger.logDebug("ClienApp", "Skipping mention highlite image: ${img.attr("src")}")
+                                        isMentionImage -> NetworkLogger.logDebug("ClienApp", "Skipping mention image: ${img.attr("src")}")
+                                    }
+                                    return@forEach
+                                }
+                                
                                 val src = img.attr("src")
                                 val dataSrc = img.attr("data-src")
                                 val actualSrc = when {
@@ -761,7 +875,7 @@ class ClienRepository {
                                         else -> "https://m.clien.net/$actualSrc"
                                     }
                                     commentImages.add(fullImageUrl)
-                                    NetworkLogger.logDebug("ClienApp", "Found comment image: $fullImageUrl")
+                                    NetworkLogger.logDebug("ClienApp", "Found comment content image: $fullImageUrl")
                                 }
                             }
                             
@@ -769,21 +883,24 @@ class ClienRepository {
                         }
                         
                         // 유효한 댓글인지 확인하고 추가
-                        if (author.isNotEmpty() && content.isNotEmpty() && isValidCommentContent(content)) {
-                            val commentKey = "$author|$content"
+                        if (commentAuthor.isNotEmpty() && content.isNotEmpty() && isValidCommentContent(content)) {
+                            val commentKey = "$commentAuthor|$content"
                             if (!processedComments.contains(commentKey)) {
                                 processedComments.add(commentKey)
                                 comments.add(Comment(
-                                    author = author,
+                                    author = commentAuthor,
+                                    authorImageUrl = commentAuthorImageUrl,
                                     content = content,
                                     date = "",
                                     isReply = isReply,
-                                    images = commentImages
+                                    images = commentImages,
+                                    mentionAuthor = mentionAuthor,
+                                    mentionAuthorImageUrl = mentionAuthorImageUrl
                                 ))
-                                NetworkLogger.logDebug("ClienApp", "Added comment: $author (reply: $isReply)")
+                                NetworkLogger.logDebug("ClienApp", "Added comment: $commentAuthor (reply: $isReply)")
                             }
                         } else {
-                            NetworkLogger.logDebug("ClienApp", "Skipped invalid comment - author: '$author', content: '$content'")
+                            NetworkLogger.logDebug("ClienApp", "Skipped invalid comment - author: '$commentAuthor', content: '$content'")
                         }
                     } catch (e: Exception) {
                         NetworkLogger.logError("ClienApp", "Error parsing comment: ${e.message}", e)
@@ -804,6 +921,7 @@ class ClienRepository {
                 images = images,
                 youtubeVideoIds = youtubeVideoIds,
                 author = author,
+                authorImageUrl = authorImageUrl,
                 date = date,
                 views = views,
                 comments = comments,
@@ -886,9 +1004,12 @@ fun ClienApp() {
     val context = LocalContext.current
     var refreshTrigger by remember { mutableStateOf(0) }
     
-    // Coil ImageLoader with unsafe SSL settings
+    // Coil ImageLoader with unsafe SSL settings and gif support
     val imageLoader = ImageLoader.Builder(context)
         .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
+        .components {
+            add(GifDecoder.Factory(enforceMinimumFrameDelay = true))
+        }
         .build()
     
     CompositionLocalProvider(LocalImageLoader provides imageLoader) {
@@ -1145,16 +1266,38 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                 
                 // 2. Author : date
                 if (postDetail!!.author.isNotEmpty() || postDetail!!.date.isNotEmpty()) {
-                    Text(
-                        text = buildAnnotatedString {
-                            withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)) {
-                                append(postDetail!!.author)
-                            }
-                            append(" : ${postDetail!!.date}")
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (postDetail!!.authorImageUrl.isNotEmpty()) {
+                            // 이미지로 author 표시
+                            AsyncImage(
+                                model = postDetail!!.authorImageUrl,
+                                contentDescription = postDetail!!.author,
+                                modifier = Modifier
+                                    .height(14.sp.value.dp)
+                                    .wrapContentWidth()
+                                    .clip(RoundedCornerShape(2.dp)),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            // 텍스트로 author 표시
+                            Text(
+                                text = postDetail!!.author,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        if (postDetail!!.date.isNotEmpty()) {
+                            Text(
+                                text = " : ${postDetail!!.date}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
                 
                 // 3. views
@@ -1361,20 +1504,82 @@ fun CommentItem(comment: Comment) {
             )
     ) {
         // 1. ID
-        Text(
-            text = comment.author,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (comment.authorImageUrl.isNotEmpty()) {
+                // 이미지로 author 표시
+                AsyncImage(
+                    model = comment.authorImageUrl,
+                    contentDescription = comment.author,
+                    modifier = Modifier
+                        .height(14.sp.value.dp)
+                        .wrapContentWidth()
+                        .clip(RoundedCornerShape(2.dp)),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                // 텍스트로 author 표시
+                Text(
+                    text = comment.author,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
         
-        // 2. 내용
-        LinkifyText(
-            text = comment.content,
-            fontSize = 14,
-            lineHeight = 20,
-            modifier = Modifier.padding(top = 2.dp)
-        )
+        // 2. 언급 + 내용
+        Column(modifier = Modifier.padding(top = 2.dp)) {
+            // 언급이 있는 경우 먼저 표시
+            if (comment.mentionAuthor.isNotEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "@",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (comment.mentionAuthorImageUrl.isNotEmpty()) {
+                        // 언급된 author의 이미지 표시
+                        AsyncImage(
+                            model = comment.mentionAuthorImageUrl,
+                            contentDescription = comment.mentionAuthor,
+                            modifier = Modifier
+                                .height(14.sp.value.dp)
+                                .wrapContentWidth()
+                                .clip(RoundedCornerShape(2.dp)),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        // 언급된 author의 텍스트 표시
+                        Text(
+                            text = comment.mentionAuthor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        text = "님",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            
+            // 댓글 내용 표시
+            LinkifyText(
+                text = comment.content,
+                fontSize = 14,
+                lineHeight = 20
+            )
+        }
         
         // 3. 이미지 (있는 경우)
         if (comment.images.isNotEmpty()) {
@@ -1496,12 +1701,31 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             if (post.author.isNotEmpty()) {
-                Text(
-                    text = post.author,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary // 파란색으로 변경
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (post.authorImageUrl.isNotEmpty()) {
+                        // 이미지로 author 표시 (텍스트와 같은 크기)
+                        AsyncImage(
+                            model = post.authorImageUrl,
+                            contentDescription = post.author,
+                            modifier = Modifier
+                                .height(12.sp.value.dp)
+                                .wrapContentWidth()
+                                .clip(RoundedCornerShape(2.dp)),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        // 텍스트로 author 표시
+                        Text(
+                            text = post.author,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
             if (post.date.isNotEmpty()) {
                 Text(
@@ -1726,9 +1950,12 @@ class MainActivity : ComponentActivity() {
         // 세션 관리자 초기화
         SessionManager.init(this)
         
-        // Coil 기본 이미지 로더 설정
+        // Coil 기본 이미지 로더 설정 (gif 지원 포함)
         val imageLoader = ImageLoader.Builder(this)
             .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
+            .components {
+                add(GifDecoder.Factory(enforceMinimumFrameDelay = true))
+            }
             .build()
         coil.Coil.setImageLoader(imageLoader)
         
