@@ -106,7 +106,6 @@ data class PostDetail(
     val date: String = "",
     val views: String = "",
     val comments: List<Comment> = emptyList(),
-    val sourceUrl: String = "",
     val nextPageUrl: String? = null
 )
 
@@ -925,7 +924,6 @@ class ClienRepository {
                 date = date,
                 views = views,
                 comments = comments,
-                sourceUrl = sourceUrl,
                 nextPageUrl = nextPageUrl
             )
             
@@ -1249,12 +1247,6 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                             .verticalScroll(rememberScrollState())
                             .padding(8.dp)
                     ) {
-                // 0. 출처 링크 미리보기 (있는 경우 최상단에 표시)
-                if (postDetail!!.sourceUrl.isNotEmpty()) {
-                    LinkPreview(url = postDetail!!.sourceUrl)
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-                
                 // 1. 제목
                 Text(
                     text = postDetail!!.title,
@@ -1264,48 +1256,13 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                // 2. Author : date
-                if (postDetail!!.author.isNotEmpty() || postDetail!!.date.isNotEmpty()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (postDetail!!.authorImageUrl.isNotEmpty()) {
-                            // 이미지로 author 표시
-                            AsyncImage(
-                                model = postDetail!!.authorImageUrl,
-                                contentDescription = postDetail!!.author,
-                                modifier = Modifier
-                                    .height(14.sp.value.dp)
-                                    .wrapContentWidth()
-                                    .clip(RoundedCornerShape(2.dp)),
-                                contentScale = ContentScale.Fit
-                            )
-                        } else {
-                            // 텍스트로 author 표시
-                            Text(
-                                text = postDetail!!.author,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        if (postDetail!!.date.isNotEmpty()) {
-                            Text(
-                                text = " : ${postDetail!!.date}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                
-                // 3. views
-                if (postDetail!!.views.isNotEmpty()) {
+                // 2. Author
+                if (postDetail!!.author.isNotEmpty()) {
                     Text(
-                        text = "조회 ${postDetail!!.views}",
+                        text = postDetail!!.author,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
                     )
                 }
                 
