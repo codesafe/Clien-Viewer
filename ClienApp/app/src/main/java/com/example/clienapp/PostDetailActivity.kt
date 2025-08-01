@@ -4,6 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
 import androidx.compose.runtime.CompositionLocalProvider
@@ -34,8 +38,13 @@ class PostDetailActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                CompositionLocalProvider(LocalImageLoader provides imageLoader) {
-                    PostDetailScreen(postUrl = postUrl, postTitle = postTitle, onBack = { finish() })
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.White
+                ) {
+                    CompositionLocalProvider(LocalImageLoader provides imageLoader) {
+                        PostDetailScreen(postUrl = postUrl, postTitle = postTitle, onBack = { finish() })
+                    }
                 }
             }
         }

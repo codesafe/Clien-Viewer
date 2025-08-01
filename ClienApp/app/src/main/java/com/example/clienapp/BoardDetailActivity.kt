@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -47,8 +48,13 @@ class BoardDetailActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                CompositionLocalProvider(LocalImageLoader provides imageLoader) {
-                    BoardDetailScreen(boardUrl = boardUrl, boardTitle = boardTitle, onBack = { finish() })
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.White
+                ) {
+                    CompositionLocalProvider(LocalImageLoader provides imageLoader) {
+                        BoardDetailScreen(boardUrl = boardUrl, boardTitle = boardTitle, onBack = { finish() })
+                    }
                 }
             }
         }
@@ -158,7 +164,7 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
         ) {
             if (isLoading) {
                 Box(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().background(Color.White)
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center)
@@ -167,7 +173,7 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
             } else {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().background(Color.White),
                     contentPadding = PaddingValues(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {

@@ -1113,6 +1113,7 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(Color.White)
                     .padding(paddingValues)
             ) {
                 CircularProgressIndicator(
@@ -1124,6 +1125,7 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
                 // 첫화면의 배경
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(Color.White)
                     .padding(paddingValues),
                 
                 contentPadding = PaddingValues(8.dp),  // 16dp에서 8dp로 축소
@@ -1229,6 +1231,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(Color.White)
                     .padding(paddingValues)
             ) {
                 CircularProgressIndicator(
@@ -1246,12 +1249,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            if (VisitedPostsManager.isVisited(postUrl))
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                            else
-                                MaterialTheme.colorScheme.background
-                        )
+                        .background(Color.White)
                 ) {
                     Column(
                         modifier = Modifier
@@ -1270,12 +1268,35 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                 
                 // 2. Author
                 if (postDetail!!.author.isNotEmpty()) {
-                    Text(
-                        text = postDetail!!.author,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (postDetail!!.authorImageUrl.isNotEmpty()) {
+                            // 이미지로 author 표시
+                            AsyncImage(
+                                model = postDetail!!.authorImageUrl,
+                                contentDescription = postDetail!!.author,
+                                modifier = Modifier
+                                    .height(16.sp.value.dp)
+                                    .wrapContentWidth()
+                                    .clip(RoundedCornerShape(2.dp)),
+                                contentScale = ContentScale.Fit,
+                                onError = { 
+                                    // 이미지 로드 실패 시 로그
+                                    NetworkLogger.logError("PostDetailAuthorImage", "Failed to load: ${postDetail!!.authorImageUrl}", it.result.throwable)
+                                }
+                            )
+                        } else {
+                            // 텍스트로 author 표시
+                            Text(
+                                text = postDetail!!.author,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
                 
                 // 내용 전 가로 라인
@@ -1478,7 +1499,7 @@ fun CommentItem(comment: Comment) {
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (comment.authorImageUrl.isNotEmpty()) {
-                // 이미지로 author 표시
+                // 이미지로 author 표시 (텍스트와 같은 크기로 조정)
                 AsyncImage(
                     model = comment.authorImageUrl,
                     contentDescription = comment.author,
@@ -1486,7 +1507,11 @@ fun CommentItem(comment: Comment) {
                         .height(14.sp.value.dp)
                         .wrapContentWidth()
                         .clip(RoundedCornerShape(2.dp)),
-                    contentScale = ContentScale.Fit
+                    contentScale = ContentScale.Fit,
+                    onError = { 
+                        // 이미지 로드 실패 시 로그
+                        NetworkLogger.logError("CommentAuthorImage", "Failed to load: ${comment.authorImageUrl}", it.result.throwable)
+                    }
                 )
             } else {
                 // 텍스트로 author 표시
@@ -1514,7 +1539,7 @@ fun CommentItem(comment: Comment) {
                         color = MaterialTheme.colorScheme.primary
                     )
                     if (comment.mentionAuthorImageUrl.isNotEmpty()) {
-                        // 언급된 author의 이미지 표시
+                        // 언급된 author의 이미지 표시 (텍스트와 같은 크기로 조정)
                         AsyncImage(
                             model = comment.mentionAuthorImageUrl,
                             contentDescription = comment.mentionAuthor,
@@ -1522,7 +1547,11 @@ fun CommentItem(comment: Comment) {
                                 .height(14.sp.value.dp)
                                 .wrapContentWidth()
                                 .clip(RoundedCornerShape(2.dp)),
-                            contentScale = ContentScale.Fit
+                            contentScale = ContentScale.Fit,
+                            onError = { 
+                                // 이미지 로드 실패 시 로그
+                                NetworkLogger.logError("MentionAuthorImage", "Failed to load: ${comment.mentionAuthorImageUrl}", it.result.throwable)
+                            }
                         )
                     } else {
                         // 언급된 author의 텍스트 표시
@@ -1590,7 +1619,7 @@ fun MenuItemCard(item: MenuItem, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .background(Color.White) // 흰색 배경
+            .background(Color.White)
             .padding(12.dp),
     ) {
         Text(
@@ -1675,7 +1704,7 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (post.authorImageUrl.isNotEmpty()) {
-                        // 이미지로 author 표시 (텍스트와 같은 크기)
+                        // 이미지로 author 표시 (텍스트와 같은 크기로 조정)
                         AsyncImage(
                             model = post.authorImageUrl,
                             contentDescription = post.author,
@@ -1683,7 +1712,11 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
                                 .height(12.sp.value.dp)
                                 .wrapContentWidth()
                                 .clip(RoundedCornerShape(2.dp)),
-                            contentScale = ContentScale.Fit
+                            contentScale = ContentScale.Fit,
+                            onError = { 
+                                // 이미지 로드 실패 시 로그
+                                NetworkLogger.logError("PostAuthorImage", "Failed to load: ${post.authorImageUrl}", it.result.throwable)
+                            }
                         )
                     } else {
                         // 텍스트로 author 표시
@@ -1737,6 +1770,7 @@ fun LoginScreen(onBack: () -> Unit, onLoginSuccess: (String) -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.White)
                 .padding(paddingValues)
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
@@ -1933,7 +1967,12 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             MaterialTheme {
-                ClienApp()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.White
+                ) {
+                    ClienApp()
+                }
             }
         }
     }
