@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -1160,27 +1161,38 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
 @Composable
 fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
     var postDetail by remember { mutableStateOf<PostDetail?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isRefreshing by remember { mutableStateOf(false) }
+    var isLoading by rememberSaveable { mutableStateOf(true) }
+    var isRefreshing by rememberSaveable { mutableStateOf(false) }
     var selectedImageUrl by remember { mutableStateOf<String?>(null) }
     val repository = remember { ClienRepository() }
     val scope = rememberCoroutineScope()
     val swipeRefreshState = rememberSwipeRefreshState(isRefreshing)
 
-    // 초기 로드
+    // 초기 로드 (캐시 우선 확인)
     LaunchedEffect(postUrl) {
         Log.d("PostDetailScreen", "Loading post detail for URL: $postUrl")
         scope.launch {
             isLoading = true
-            postDetail = repository.fetchPostDetail(postUrl)
-            isLoading = false
-
-            if (postDetail != null) {
-                Log.d("PostDetailScreen", "Post detail loaded: ${postDetail!!.title}")
-                Log.d("PostDetailScreen", "Content length: ${postDetail!!.content.length}, HTML content length: ${postDetail!!.htmlContent.length}")
+            
+            // 먼저 캐시에서 확인
+            val cachedDetail = CacheManager.getCachedPostDetail(postUrl)
+            if (cachedDetail != null) {
+                Log.d("PostDetailScreen", "Using cached post detail: ${cachedDetail.title}")
+                postDetail = cachedDetail
+                isLoading = false
                 VisitedPostsManager.markAsVisited(postUrl)
             } else {
-                Log.e("PostDetailScreen", "Failed to load post detail for URL: $postUrl")
+                // 캐시에 없으면 네트워크에서 로드
+                postDetail = repository.fetchPostDetail(postUrl)
+                isLoading = false
+
+                if (postDetail != null) {
+                    Log.d("PostDetailScreen", "Post detail loaded from network: ${postDetail!!.title}")
+                    Log.d("PostDetailScreen", "Content length: ${postDetail!!.content.length}, HTML content length: ${postDetail!!.htmlContent.length}")
+                    VisitedPostsManager.markAsVisited(postUrl)
+                } else {
+                    Log.e("PostDetailScreen", "Failed to load post detail for URL: $postUrl")
+                }
             }
         }
     }
@@ -1906,6 +1918,9 @@ class MainActivity : ComponentActivity() {
         
         // 세션 관리자 초기화
         SessionManager.init(this)
+        
+        // 캐시 관리자 초기화
+        CacheManager.init(this)
         
         // Coil 기본 이미지 로더 설정 (gif 지원 포함)
         val imageLoader = ImageLoader.Builder(this)

@@ -106,9 +106,10 @@ fun LinkifyText(
                     Spacer(modifier = Modifier.height(4.dp))
                     if (isYouTubeUrl(part.url)) {
                         YouTubePreview(url = part.url)
-                    } else if (shouldShowLinkPreview(part.url)) {
-                        LinkPreview(url = part.url)
                     }
+//                    else if (shouldShowLinkPreview(part.url)) {
+//                        LinkPreview(url = part.url)
+//                    }
                     
                     // 다음 요소와의 간격
                     if (index < parts.size - 1) {

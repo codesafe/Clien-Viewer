@@ -10,11 +10,19 @@ import androidx.compose.runtime.CompositionLocalProvider
 import android.util.Log
 
 class PostDetailActivity : ComponentActivity() {
+    
+    companion object {
+        private const val KEY_POST_URL = "key_post_url"
+        private const val KEY_POST_TITLE = "key_post_title"
+    }
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val postUrl = UrlUtils.decodeUrl(intent.getStringExtra("postUrl") ?: "")
-        val postTitle = UrlUtils.decodeUrl(intent.getStringExtra("postTitle") ?: "")
+        val postUrl = savedInstanceState?.getString(KEY_POST_URL) 
+            ?: UrlUtils.decodeUrl(intent.getStringExtra("postUrl") ?: "")
+        val postTitle = savedInstanceState?.getString(KEY_POST_TITLE)
+            ?: UrlUtils.decodeUrl(intent.getStringExtra("postTitle") ?: "")
 
         Log.d("PostDetailActivity", "Received postUrl: $postUrl, postTitle: $postTitle")
 
@@ -30,6 +38,16 @@ class PostDetailActivity : ComponentActivity() {
                     PostDetailScreen(postUrl = postUrl, postTitle = postTitle, onBack = { finish() })
                 }
             }
+        }
+    }
+    
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        intent.getStringExtra("postUrl")?.let { 
+            outState.putString(KEY_POST_URL, it)
+        }
+        intent.getStringExtra("postTitle")?.let { 
+            outState.putString(KEY_POST_TITLE, it)
         }
     }
 }
