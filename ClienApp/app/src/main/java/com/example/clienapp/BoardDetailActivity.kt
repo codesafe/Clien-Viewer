@@ -129,10 +129,12 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                         val morePosts = repository.fetchBoardPosts(boardUrl, page = nextPage)
 
                         if (morePosts.isNotEmpty()) {
-                            posts = posts + morePosts
+                            val existingUrls = posts.map { it.url }.toSet()
+                            val newPosts = morePosts.filter { !existingUrls.contains(it.url) }
+                            posts = posts + newPosts
                             currentPage = nextPage
                             hasMorePages = true
-                            Log.d("ClienApp", "Loaded ${morePosts.size} posts from page $nextPage, total: ${posts.size}")
+                            Log.d("ClienApp", "Loaded ${newPosts.size} new posts from page $nextPage, total: ${posts.size}")
                         } else {
                             hasMorePages = false
                             Log.d("ClienApp", "No more posts found on page $nextPage")
