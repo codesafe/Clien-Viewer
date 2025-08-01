@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
+import coil.decode.GifDecoder
 import androidx.compose.runtime.CompositionLocalProvider
 import android.util.Log
 
@@ -32,6 +33,9 @@ class PostDetailActivity : ComponentActivity() {
 
         // Coil ImageLoader with unsafe SSL settings
         val imageLoader = ImageLoader.Builder(this)
+            .components {
+                add(GifDecoder.Factory())
+            }
             .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
             .build()
         coil.Coil.setImageLoader(imageLoader)

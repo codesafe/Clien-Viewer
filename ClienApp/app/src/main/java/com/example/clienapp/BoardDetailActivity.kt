@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
+import coil.decode.GifDecoder
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 import kotlinx.coroutines.launch
@@ -41,6 +42,9 @@ class BoardDetailActivity : ComponentActivity() {
 
         // Coil ImageLoader with unsafe SSL settings
         val imageLoader = ImageLoader.Builder(this)
+            .components {
+                add(GifDecoder.Factory())
+            }
             .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
             .build()
         coil.Coil.setImageLoader(imageLoader)
@@ -76,7 +80,7 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
     val context = LocalContext.current // Add context for Intent
     var dragDistance by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
-    val swipeThreshold = with(density) { 100.dp.toPx() }
+    val swipeThreshold = with(density) { 84.dp.toPx() }
 
     // 초기 로드
     LaunchedEffect(boardUrl) {

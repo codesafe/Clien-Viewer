@@ -1998,10 +1998,10 @@ class MainActivity : ComponentActivity() {
         
         // Coil 기본 이미지 로더 설정 (gif 지원 포함)
         val imageLoader = ImageLoader.Builder(this)
-            .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
             .components {
-                add(GifDecoder.Factory(enforceMinimumFrameDelay = true))
+                add(GifDecoder.Factory())
             }
+            .okHttpClient(SSLHelper.getUnsafeOkHttpClient())
             .build()
         coil.Coil.setImageLoader(imageLoader)
         
