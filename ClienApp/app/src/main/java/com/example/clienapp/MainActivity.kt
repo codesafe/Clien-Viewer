@@ -12,8 +12,10 @@ import androidx.compose.foundation.lazy.itemsIndexed // Add this import
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -385,18 +387,10 @@ class ClienRepository {
     }
 
     suspend fun fetchMenuItems(): List<MenuItem> = withContext(Dispatchers.IO) {
-        // 캐시 확인
-        val cached = CacheManager.getCachedMenuItems("main_menu")
-        if (cached != null) {
-            NetworkLogger.logDebug("ClienApp", "Using cached menu items")
-            return@withContext cached
-        }
-        
         try {
-            // 하드코딩된 게시판 목록 (실제 URL 패턴에 맞게 수정 필요)
-            val menuItems = listOf(
+            // 하드코딩된 게시판 목록
+            val hardcodedItems = listOf(
                 MenuItem("모두의공원", "/service/board/park"),
-                //MenuItem("추천글계시판", "/service/service/recommend"),
                 MenuItem("아무거나질문", "/service/board/kin"),
                 MenuItem("정보와자료", "/service/board/lecture"),
                 MenuItem("새로운소식", "/service/board/news"),
@@ -405,15 +399,20 @@ class ClienRepository {
                 MenuItem("회원중고장터", "/service/board/sold"),
                 MenuItem("강좌/사용기", "/service/board/use")
             )
-            
-            menuItems.forEach { item ->
+
+            // 사용자 정의 게시판 목록 불러오기
+            val customItems = CustomBoardRepository.getCustomBoards()
+
+            val allItems = hardcodedItems + customItems
+
+            allItems.forEach { item ->
                 Log.d("ClienApp", "Board: ${item.title} -> ${item.url}")
             }
-            
-            // 캐시에 저장
-            CacheManager.cacheMenuItems("main_menu", menuItems)
-            
-            menuItems
+
+            // 캐시에 전체 목록 저장 (선택적)
+            CacheManager.cacheMenuItems("main_menu", allItems)
+
+            allItems
         } catch (e: Exception) {
             e.printStackTrace()
             NetworkLogger.logError("ClienApp", "Error fetching menu items: ${e.message}", e)
@@ -1064,26 +1063,77 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
     var isLoggedIn by remember { mutableStateOf(SessionManager.isLoggedIn()) }
     val repository = remember { ClienRepository() }
     val scope = rememberCoroutineScope()
-    
-    // refreshTrigger가 변경되면 로그인 상태 다시 확인
-    LaunchedEffect(refreshTrigger) {
-        isLoggedIn = SessionManager.isLoggedIn()
-    }
-    
-    LaunchedEffect(Unit) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    fun refreshMenuList() {
         scope.launch {
             isLoading = true
             menuItems = repository.fetchMenuItems()
             isLoading = false
         }
     }
-    
+
+    // refreshTrigger가 변경되면 로그인 상태 다시 확인
+    LaunchedEffect(refreshTrigger) {
+        isLoggedIn = SessionManager.isLoggedIn()
+    }
+
+    LaunchedEffect(Unit) {
+        refreshMenuList()
+    }
+
+    if (showDialog) {
+        var title by remember { mutableStateOf("") }
+        var url by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("게시판 추가") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("게시판 이름") }
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        label = { Text("게시판 URL") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (title.isNotEmpty() && url.isNotEmpty()) {
+                            CustomBoardRepository.addCustomBoard(MenuItem(title, url))
+                            showDialog = false
+                            refreshMenuList()
+                        }
+                    }
+                ) {
+                    Text("추가")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showDialog = false }) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             Column {
                 TopAppBar(
                     title = { Text("Clien 게시판") },
                     actions = {
+                        IconButton(onClick = { showDialog = true }) {
+                            Icon(Icons.Default.Add, contentDescription = "게시판 추가")
+                        }
                         if (isLoggedIn) {
                             Row {
                                 Text(
@@ -1136,15 +1186,47 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
             ) {
                 itemsIndexed(menuItems) { index, item ->
                     val context = LocalContext.current
-                    MenuItemCard(item) {
-                        val encodedUrl = UrlUtils.encodeUrl(item.url)
-                        val encodedTitle = UrlUtils.encodeUrl(item.title)
-                        val intent = Intent(context, BoardDetailActivity::class.java).apply {
-                            putExtra("boardUrl", encodedUrl)
-                            putExtra("boardTitle", encodedTitle)
-                        }
-                        context.startActivity(intent)
+                    val isCustom = CustomBoardRepository.getCustomBoards().any { it.url == item.url && it.title == item.title }
+                    var showDeleteDialog by remember { mutableStateOf(false) }
+
+                    if (showDeleteDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showDeleteDialog = false },
+                            title = { Text("게시판 삭제") },
+                            text = { Text("'${item.title}' 게시판을 삭제하시겠습니까?") },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        CustomBoardRepository.deleteCustomBoard(item)
+                                        showDeleteDialog = false
+                                        refreshMenuList()
+                                    }
+                                ) {
+                                    Text("삭제")
+                                }
+                            },
+                            dismissButton = {
+                                Button(onClick = { showDeleteDialog = false }) {
+                                    Text("취소")
+                                }
+                            }
+                        )
                     }
+
+                    MenuItemCard(item, isCustom,
+                        onClick = {
+                            val encodedUrl = UrlUtils.encodeUrl(item.url)
+                            val encodedTitle = UrlUtils.encodeUrl(item.title)
+                            val intent = Intent(context, BoardDetailActivity::class.java).apply {
+                                putExtra("boardUrl", encodedUrl)
+                                putExtra("boardTitle", encodedTitle)
+                            }
+                            context.startActivity(intent)
+                        },
+                        onLongClick = {
+                            showDeleteDialog = true
+                        }
+                    )
                     if (index < menuItems.size - 1) {
                         Divider(
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -1654,11 +1736,20 @@ fun CommentItem(comment: Comment) {
 }
 
 @Composable
-fun MenuItemCard(item: MenuItem, onClick: () -> Unit) {
+fun MenuItemCard(item: MenuItem, isCustom: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = {
+                        if (isCustom) {
+                            onLongClick()
+                        }
+                    }
+                )
+            }
             .background(Color.White)
             .padding(12.dp),
     ) {
@@ -1992,6 +2083,9 @@ class MainActivity : ComponentActivity() {
         
         // 세션 관리자 초기화
         SessionManager.init(this)
+
+        // 사용자 정의 게시판 저장소 초기화
+        CustomBoardRepository.init(this)
         
         // 캐시 관리자 초기화
         CacheManager.init(this)
