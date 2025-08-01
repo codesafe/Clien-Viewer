@@ -67,6 +67,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.shape.CircleShape
 
 data class MenuItem(
     val title: String,
@@ -1169,13 +1172,16 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
     val repository = remember { ClienRepository() }
     val scope = rememberCoroutineScope()
     val swipeRefreshState = rememberSwipeRefreshState(isRefreshing)
+    var dragDistance by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
+    val swipeThreshold = with(density) { 100.dp.toPx() }
 
     // 초기 로드 (캐시 우선 확인)
     LaunchedEffect(postUrl) {
         Log.d("PostDetailScreen", "Loading post detail for URL: $postUrl")
         scope.launch {
             isLoading = true
-            
+
             // 먼저 캐시에서 확인
             val cachedDetail = CacheManager.getCachedPostDetail(postUrl)
             if (cachedDetail != null) {
@@ -1209,185 +1215,219 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text(postTitle, maxLines = 1) },
-                    navigationIcon = {
-                        IconButton(onClick = { onBack() }) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "뒤로가기")
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .smartSwipeBack(
+                onBack = onBack,
+                onDrag = { distance ->
+                    dragDistance = distance
+                }
+            )
+    ) {
+        Scaffold(
+            topBar = {
+                Column {
+                    TopAppBar(
+                        title = { Text(postTitle, maxLines = 1) },
+                        navigationIcon = {
+                            IconButton(onClick = { onBack() }) {
+                                Icon(Icons.Filled.ArrowBack, contentDescription = "뒤로가기")
+                            }
                         }
-                    }
-                )
-                Divider(thickness = 2.dp, color = Color.Black)
+                    )
+                    Divider(thickness = 2.dp, color = Color.Black)
+                }
             }
-        },
-        modifier = Modifier.smartSwipeBack {
-            onBack()
-        }
-    ) { paddingValues ->
-        if (isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White)
-                    .padding(paddingValues)
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
-                )
-            }
-        } else if (postDetail != null) {
-            SwipeRefresh(
-                state = swipeRefreshState,
-                onRefresh = { isRefreshing = true },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
+        ) { paddingValues ->
+            if (isLoading) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color.White)
+                        .padding(paddingValues)
                 ) {
-                    Column(
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
+                    )
+                }
+            } else if (postDetail != null) {
+                SwipeRefresh(
+                    state = swipeRefreshState,
+                    onRefresh = { isRefreshing = true },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                            .padding(8.dp)
+                            .fillMaxSize()
+                            .background(Color.White)
                     ) {
-                // 1. 제목
-                Text(
-                    text = postDetail!!.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // 2. Author
-                if (postDetail!!.author.isNotEmpty()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (postDetail!!.authorImageUrl.isNotEmpty()) {
-                            // 이미지로 author 표시
-                            AsyncImage(
-                                model = postDetail!!.authorImageUrl,
-                                contentDescription = postDetail!!.author,
-                                modifier = Modifier
-                                    .height(16.sp.value.dp)
-                                    .wrapContentWidth()
-                                    .clip(RoundedCornerShape(2.dp)),
-                                contentScale = ContentScale.Fit,
-                                onError = { 
-                                    // 이미지 로드 실패 시 로그
-                                    NetworkLogger.logError("PostDetailAuthorImage", "Failed to load: ${postDetail!!.authorImageUrl}", it.result.throwable)
-                                }
-                            )
-                        } else {
-                            // 텍스트로 author 표시
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(8.dp)
+                        ) {
+                            // 1. 제목
                             Text(
-                                text = postDetail!!.author,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                text = postDetail!!.title,
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
-                        }
-                    }
-                }
-                
-                // 내용 전 가로 라인
-                Divider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    thickness = 1.dp
-                )
-                
-                // 4. 내용 (HTML 내용이 있으면 HTML 렌더링, 없으면 일반 텍스트)
-                if (postDetail!!.htmlContent.isNotEmpty()) {
-                    HtmlContent(
-                        htmlContent = postDetail!!.htmlContent,
-                        fontSize = 15,
-                        lineHeight = 20,
-                        onImageClick = { imageUrl -> selectedImageUrl = imageUrl }
-                    )
-                } else {
-                    LinkifyText(
-                        text = postDetail!!.content,
-                        fontSize = 15,
-                        lineHeight = 20
-                    )
-                }
-                
-                
-                // 6. 다음 페이지 버튼
-                postDetail?.nextPageUrl?.let {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    var isLoadingNextPage by remember { mutableStateOf(false) }
 
-                    Button(
-                        onClick = {
-                            if (!isLoadingNextPage) {
-                                scope.launch {
-                                    isLoadingNextPage = true
-                                    val nextPageDetail = repository.fetchPostDetail(it)
-                                    if (nextPageDetail != null) {
-                                        postDetail = postDetail?.copy(
-                                            htmlContent = postDetail!!.htmlContent + "<br><br>" + nextPageDetail.htmlContent,
-                                            comments = postDetail!!.comments + nextPageDetail.comments,
-                                            nextPageUrl = nextPageDetail.nextPageUrl
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // 2. Author
+                            if (postDetail!!.author.isNotEmpty()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (postDetail!!.authorImageUrl.isNotEmpty()) {
+                                        // 이미지로 author 표시
+                                        AsyncImage(
+                                            model = postDetail!!.authorImageUrl,
+                                            contentDescription = postDetail!!.author,
+                                            modifier = Modifier
+                                                .height(16.sp.value.dp)
+                                                .wrapContentWidth()
+                                                .clip(RoundedCornerShape(2.dp)),
+                                            contentScale = ContentScale.Fit,
+                                            onError = { 
+                                                // 이미지 로드 실패 시 로그
+                                                NetworkLogger.logError("PostDetailAuthorImage", "Failed to load: ${postDetail!!.authorImageUrl}", it.result.throwable)
+                                            }
+                                        )
+                                    } else {
+                                        // 텍스트로 author 표시
+                                        Text(
+                                            text = postDetail!!.author,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
-                                    isLoadingNextPage = false
                                 }
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isLoadingNextPage
-                    ) {
-                        if (isLoadingNextPage) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                        } else {
-                            Text("다음 페이지")
-                        }
-                    }
-                }
 
-                // 내용 끝 가로 라인
-                Divider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    thickness = 1.dp
-                )
-                
-                // 5. 댓글
-                if (postDetail!!.comments.isNotEmpty()) {
-                    
-                    Text(
-                        text = "댓글 (${postDetail!!.comments.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    
-                    postDetail!!.comments.forEachIndexed { index, comment ->
-                        CommentItem(comment)
-                        if (index < postDetail!!.comments.size - 1) {
+                            // 내용 전 가로 라인
                             Divider(
-                                modifier = Modifier.padding(vertical = 4.dp),
-                                thickness = 0.5.dp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                thickness = 1.dp
                             )
+
+                            // 4. 내용 (HTML 내용이 있으면 HTML 렌더링, 없으면 일반 텍스트)
+                            if (postDetail!!.htmlContent.isNotEmpty()) {
+                                HtmlContent(
+                                    htmlContent = postDetail!!.htmlContent,
+                                    fontSize = 15,
+                                    lineHeight = 20,
+                                    onImageClick = { imageUrl -> selectedImageUrl = imageUrl }
+                                )
+                            } else {
+                                LinkifyText(
+                                    text = postDetail!!.content,
+                                    fontSize = 15,
+                                    lineHeight = 20
+                                )
+                            }
+
+
+                            // 6. 다음 페이지 버튼
+                            postDetail?.nextPageUrl?.let {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                var isLoadingNextPage by remember { mutableStateOf(false) }
+
+                                Button(
+                                    onClick = {
+                                        if (!isLoadingNextPage) {
+                                            scope.launch {
+                                                isLoadingNextPage = true
+                                                val nextPageDetail = repository.fetchPostDetail(it)
+                                                if (nextPageDetail != null) {
+                                                    postDetail = postDetail?.copy(
+                                                        htmlContent = postDetail!!.htmlContent + "<br><br>" + nextPageDetail.htmlContent,
+                                                        comments = postDetail!!.comments + nextPageDetail.comments,
+                                                        nextPageUrl = nextPageDetail.nextPageUrl
+                                                    )
+                                                }
+                                                isLoadingNextPage = false
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !isLoadingNextPage
+                                ) {
+                                    if (isLoadingNextPage) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    } else {
+                                        Text("다음 페이지")
+                                    }
+                                }
+                            }
+
+                            // 내용 끝 가로 라인
+                            Divider(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                thickness = 1.dp
+                            )
+
+                            // 5. 댓글
+                            if (postDetail!!.comments.isNotEmpty()) {
+
+                                Text(
+                                    text = "댓글 (${postDetail!!.comments.size})",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
+
+                                postDetail!!.comments.forEachIndexed { index, comment ->
+                                    CommentItem(comment)
+                                    if (index < postDetail!!.comments.size - 1) {
+                                        Divider(
+                                            modifier = Modifier.padding(vertical = 4.dp),
+                                            thickness = 0.5.dp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    }
-                }
                     }
                 }
             }
         }
+
+        // 스와이프 백 아이콘
+        val iconProgress = (dragDistance / swipeThreshold).coerceIn(0f, 1f)
+
+        if (dragDistance > 0) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = (dragDistance * 0.1f).dp)
+                    .padding(start = 16.dp)
+                    .size(56.dp * iconProgress) // Animate size
+                    .background(
+                        //color = MaterialTheme.colorScheme.primary.copy(alpha = iconProgress * 0.8f),
+                        color = Color.Gray.copy(iconProgress * 0.8f),
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "뒤로가기",
+                    tint = Color.White.copy(alpha = iconProgress),
+                    modifier = Modifier.size(28.dp * iconProgress) // Animate size
+                )
+            }
+        }
     }
-    
+
     // 이미지 확대 모달
     selectedImageUrl?.let { imageUrl ->
         ImageViewer(
