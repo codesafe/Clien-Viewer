@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -173,7 +174,16 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
             topBar = {
                 Column {
                     TopAppBar(
-                        title = { Text(boardTitle) },
+                        title = { 
+                            Text(
+                                text = boardTitle,
+                                modifier = Modifier.clickable {
+                                    scope.launch {
+                                        listState.animateScrollToItem(0)
+                                    }
+                                }
+                            )
+                        },
                         navigationIcon = {
                             IconButton(onClick = { onBack() }) {
                                 Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
@@ -233,17 +243,30 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                             }
                         }
 
-                        // 로딩 인디케이터
-                        if (isLoadingMore) {
+                        // 로딩 인디케이터 (다음 페이지 로딩시에만 표시)
+                        if (isLoadingMore && hasMorePages) {
                             item {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(16.dp)
+                                        .padding(vertical = 16.dp)
                                 ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.align(androidx.compose.ui.Alignment.Center)
-                                    )
+                                    Row(
+                                        modifier = Modifier.align(Alignment.Center),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = "다음 페이지 로딩 중...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }

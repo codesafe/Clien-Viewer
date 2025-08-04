@@ -1091,6 +1091,7 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
     val repository = remember { ClienRepository() }
     val scope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     fun refreshMenuList() {
         scope.launch {
@@ -1156,7 +1157,16 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("Clien 게시판") },
+                    title = { 
+                        Text(
+                            text = "Clien 게시판",
+                            modifier = Modifier.clickable {
+                                scope.launch {
+                                    listState.animateScrollToItem(0)
+                                }
+                            }
+                        )
+                    },
                     actions = {
                         IconButton(onClick = { showDialog = true }) {
                             Icon(Icons.Default.Add, contentDescription = "게시판 추가")
@@ -1202,6 +1212,7 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
             }
         } else {
             LazyColumn(
+                state = listState,
                 // 첫화면의 배경
                 modifier = Modifier
                     .fillMaxSize()
@@ -1284,6 +1295,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
     var dragDistance by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 100.dp.toPx() }
+    val scrollState = rememberScrollState()
 
     // 초기 로드 (캐시 우선 확인)
     LaunchedEffect(postUrl) {
@@ -1338,7 +1350,17 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
             topBar = {
                 Column {
                     TopAppBar(
-                        title = { Text(postTitle, maxLines = 1) },
+                        title = { 
+                            Text(
+                                text = postTitle, 
+                                maxLines = 1,
+                                modifier = Modifier.clickable {
+                                    scope.launch {
+                                        scrollState.animateScrollTo(0)
+                                    }
+                                }
+                            )
+                        },
                         navigationIcon = {
                             IconButton(onClick = { onBack() }) {
                                 Icon(Icons.Filled.ArrowBack, contentDescription = "뒤로가기")
@@ -1376,7 +1398,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
+                                .verticalScroll(scrollState)
                                 .padding(8.dp)
                         ) {
                             // 1. 제목
