@@ -19,6 +19,13 @@ import org.jsoup.nodes.TextNode
 import androidx.compose.foundation.clickable
 
 import coil.compose.LocalImageLoader
+import coil.ImageLoader
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import coil.request.ImageRequest
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import android.os.Build
 
 @Composable
 fun HtmlContent(
@@ -49,6 +56,11 @@ fun RenderNode(
         is TextNode -> {
             val text = node.text().trim()
             if (text.isNotEmpty()) {
+                // GIF 텍스트는 표시하지 않음
+                if (text.equals("GIF", ignoreCase = true)) {
+                    NetworkLogger.logDebug("HtmlContent", "Skipping GIF text node: parent=${node.parent()?.toString()}")
+                    return
+                }
                 LinkifyText(
                     text = text,
                     fontSize = fontSize,
@@ -61,10 +73,30 @@ fun RenderNode(
                 "img" -> {
                     val src = node.attr("src")
                     val dataSrc = node.attr("data-src") // lazy loading 이미지
+                    val alt = node.attr("alt")
+                    val className = node.attr("class")
+                    
+                    // 모든 img 태그 로깅
+                    //NetworkLogger.logDebug("HtmlContent", "IMG tag - src: $src, data-src: $dataSrc, alt: $alt, class: $className")
+                    
                     val actualSrc = when {
                         src.isNotEmpty() && !src.contains("transparent") && !src.contains("blank") -> src
                         dataSrc.isNotEmpty() -> dataSrc
                         else -> ""
+                    }
+                    
+                    // alt가 "GIF"인 경우에도 이미지가 있는지 다시 확인
+                    if (actualSrc.isEmpty() && alt.equals("GIF", ignoreCase = true)) {
+                        // data-original 또는 다른 속성 확인
+                        val dataOriginal = node.attr("data-original")
+                        val dataLazySrc = node.attr("data-lazy-src")
+                        
+                        if (dataOriginal.isNotEmpty()) {
+                            NetworkLogger.logDebug("HtmlContent", "Found GIF with data-original: $dataOriginal")
+                        }
+                        if (dataLazySrc.isNotEmpty()) {
+                            NetworkLogger.logDebug("HtmlContent", "Found GIF with data-lazy-src: $dataLazySrc")
+                        }
                     }
                     
                     if (actualSrc.isNotEmpty()) {
@@ -76,6 +108,12 @@ fun RenderNode(
                         }
                         
                         NetworkLogger.logDebug("HtmlContent", "Loading image: $fullImageUrl")
+                        
+                        // GIF 이미지 추가 로깅
+                        if (fullImageUrl.contains(".gif", ignoreCase = true)) {
+                            NetworkLogger.logDebug("HtmlContent", "Loading GIF image: $fullImageUrl")
+                            NetworkLogger.logDebug("HtmlContent", "IMG tag attributes - src: $src, data-src: $dataSrc")
+                        }
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         Box(
@@ -90,13 +128,22 @@ fun RenderNode(
                                         modifier
                                     }
                                 },
-                            contentAlignment = Alignment.CenterStart
+                            contentAlignment = Alignment.Center
                         ) {
+                            val context = LocalContext.current
+                            val configuration = LocalConfiguration.current
+                            val screenWidthDp = configuration.screenWidthDp.dp
+                            
                             AsyncImage(
-                                model = fullImageUrl,
+                                model = ImageRequest.Builder(context)
+                                    .data(fullImageUrl)
+                                    .crossfade(true)
+                                    .build(),
                                 contentDescription = "글 이미지",
-                                modifier = Modifier.wrapContentWidth(),
-                                contentScale = ContentScale.Inside,
+                                modifier = Modifier
+                                    .widthIn(max = screenWidthDp - 16.dp) // 화면 너비를 넘지 않도록
+                                    .fillMaxWidth(1.5f), // 현재 크기의 1.5배
+                                contentScale = ContentScale.FillWidth,
                                 onError = { error ->
                                     NetworkLogger.logError("HtmlContent", "Image load failed: $fullImageUrl", error.result.throwable)
                                 },
@@ -139,6 +186,43 @@ fun RenderNode(
                         )
                     )
                 }
+                "video" -> {
+                    // 비디오 태그 처리
+                    val src = node.attr("src")
+                    val poster = node.attr("poster") // 썸네일 이미지
+                    
+                    // source 태그에서 비디오 URL 찾기
+                    val videoUrl = if (src.isNotEmpty()) {
+                        src
+                    } else {
+                        node.select("source").firstOrNull()?.attr("src") ?: ""
+                    }
+                    
+                    if (videoUrl.isNotEmpty()) {
+                        val fullVideoUrl = when {
+                            videoUrl.startsWith("http://") || videoUrl.startsWith("https://") -> videoUrl
+                            videoUrl.startsWith("//") -> "https:$videoUrl"
+                            videoUrl.startsWith("/") -> "https://m.clien.net$videoUrl"
+                            else -> "https://m.clien.net/$videoUrl"
+                        }
+                        
+                        NetworkLogger.logDebug("HtmlContent", "Found video: $fullVideoUrl, poster: $poster")
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        VideoPlayer(
+                            videoUrl = fullVideoUrl,
+                            posterUrl = poster.takeIf { it.isNotEmpty() }?.let { posterUrl ->
+                                when {
+                                    posterUrl.startsWith("http://") || posterUrl.startsWith("https://") -> posterUrl
+                                    posterUrl.startsWith("//") -> "https:$posterUrl"
+                                    posterUrl.startsWith("/") -> "https://m.clien.net$posterUrl"
+                                    else -> "https://m.clien.net/$posterUrl"
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
                 "iframe" -> {
                     // YouTube iframe 처리
                     val src = node.attr("src")
@@ -148,6 +232,33 @@ fun RenderNode(
                             Spacer(modifier = Modifier.height(8.dp))
                             YouTubePreview(url = "https://www.youtube.com/watch?v=$videoId")
                             Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
+                "a" -> {
+                    // 동영상 파일 링크 확인
+                    val href = node.attr("href")
+                    if (href.endsWith(".mp4", ignoreCase = true) || 
+                        href.endsWith(".webm", ignoreCase = true) ||
+                        href.endsWith(".mov", ignoreCase = true) ||
+                        href.endsWith(".avi", ignoreCase = true)) {
+                        
+                        val fullVideoUrl = when {
+                            href.startsWith("http://") || href.startsWith("https://") -> href
+                            href.startsWith("//") -> "https:$href"
+                            href.startsWith("/") -> "https://m.clien.net$href"
+                            else -> "https://m.clien.net/$href"
+                        }
+                        
+                        //NetworkLogger.logDebug("HtmlContent", "Found video link: $fullVideoUrl")
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        VideoPlayer(videoUrl = fullVideoUrl)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    } else {
+                        // 일반 링크는 내부 콘텐츠만 렌더링
+                        node.childNodes().forEach { childNode ->
+                            RenderNode(childNode, fontSize, lineHeight, onImageClick)
                         }
                     }
                 }

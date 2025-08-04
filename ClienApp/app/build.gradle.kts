@@ -83,6 +83,11 @@ dependencies {
     // SwipeRefresh
     implementation("com.google.accompanist:accompanist-swiperefresh:0.32.0")
     
+    // ExoPlayer for video playback
+    implementation("androidx.media3:media3-exoplayer:1.2.0")
+    implementation("androidx.media3:media3-ui:1.2.0")
+    implementation("androidx.media3:media3-datasource-okhttp:1.2.0")
+    
     // 테스트
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

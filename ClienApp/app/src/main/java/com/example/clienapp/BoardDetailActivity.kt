@@ -129,12 +129,26 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                         val morePosts = repository.fetchBoardPosts(boardUrl, page = nextPage)
 
                         if (morePosts.isNotEmpty()) {
+                            // URL과 제목+작성자 조합으로 중복 체크
                             val existingUrls = posts.map { it.url }.toSet()
-                            val newPosts = morePosts.filter { !existingUrls.contains(it.url) }
-                            posts = posts + newPosts
-                            currentPage = nextPage
-                            hasMorePages = true
-                            Log.d("ClienApp", "Loaded ${newPosts.size} new posts from page $nextPage, total: ${posts.size}")
+                            val existingPosts = posts.map { "${it.title}|${it.author}" }.toSet()
+                            
+                            val newPosts = morePosts.filter { post ->
+                                // URL이 중복되지 않고, 제목+작성자 조합도 중복되지 않은 경우만 추가
+                                !existingUrls.contains(post.url) && 
+                                !existingPosts.contains("${post.title}|${post.author}")
+                            }
+                            
+                            if (newPosts.isNotEmpty()) {
+                                posts = posts + newPosts
+                                currentPage = nextPage
+                                hasMorePages = true
+                                Log.d("ClienApp", "Loaded ${newPosts.size} new posts from page $nextPage (filtered ${morePosts.size - newPosts.size} duplicates), total: ${posts.size}")
+                            } else {
+                                // 모든 게시글이 중복인 경우 다음 페이지를 시도
+                                Log.d("ClienApp", "All ${morePosts.size} posts on page $nextPage were duplicates, checking if more pages exist")
+                                hasMorePages = morePosts.size >= 20 // 한 페이지가 보통 20개 정도일 때
+                            }
                         } else {
                             hasMorePages = false
                             Log.d("ClienApp", "No more posts found on page $nextPage")

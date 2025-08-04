@@ -55,6 +55,7 @@ import coil.compose.AsyncImage
 import coil.ImageLoader
 import coil.compose.LocalImageLoader
 import coil.decode.GifDecoder
+import coil.request.ImageRequest
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -107,6 +108,7 @@ data class PostDetail(
     val htmlContent: String = "",
     val images: List<String> = emptyList(),
     val youtubeVideoIds: List<String> = emptyList(),
+    val videos: List<String> = emptyList(),
     val author: String = "",
     val authorImageUrl: String = "",
     val date: String = "",
@@ -697,6 +699,30 @@ class ClienRepository {
                 }
             }
             
+            // 동영상(MP4 등) 추출
+            val videos = mutableListOf<String>()
+            contentElement?.select("video")?.forEach { video ->
+                val src = video.attr("src")
+                
+                // source 태그에서 비디오 URL 찾기
+                val videoUrl = if (src.isNotEmpty()) {
+                    src
+                } else {
+                    video.select("source").firstOrNull()?.attr("src") ?: ""
+                }
+                
+                if (videoUrl.isNotEmpty()) {
+                    val fullVideoUrl = when {
+                        videoUrl.startsWith("http://") || videoUrl.startsWith("https://") -> videoUrl
+                        videoUrl.startsWith("//") -> "https:$videoUrl"
+                        videoUrl.startsWith("/") -> "https://m.clien.net$videoUrl"
+                        else -> "https://m.clien.net/$videoUrl"
+                    }
+                    videos.add(fullVideoUrl)
+                    NetworkLogger.logDebug("ClienApp", "Found video: $fullVideoUrl")
+                }
+            }
+            
             // 작성자 파싱 - nickname과 nickimg 구분
             var author = ""
             var authorImageUrl = ""
@@ -922,6 +948,7 @@ class ClienRepository {
                 htmlContent = htmlContent,
                 images = images,
                 youtubeVideoIds = youtubeVideoIds,
+                videos = videos,
                 author = author,
                 authorImageUrl = authorImageUrl,
                 date = date,
@@ -1432,6 +1459,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                                                     postDetail = postDetail?.copy(
                                                         htmlContent = postDetail!!.htmlContent + "<br><br>" + nextPageDetail.htmlContent,
                                                         comments = postDetail!!.comments + nextPageDetail.comments,
+                                                        videos = postDetail!!.videos + nextPageDetail.videos,
                                                         nextPageUrl = nextPageDetail.nextPageUrl
                                                     )
                                                 }
@@ -1713,7 +1741,10 @@ fun CommentItem(comment: Comment) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     AsyncImage(
-                        model = imageUrl,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(imageUrl)
+                            .crossfade(true)
+                            .build(),
                         contentDescription = "댓글 이미지",
                         modifier = Modifier.fillMaxWidth(),
                         contentScale = ContentScale.FillWidth,
