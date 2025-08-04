@@ -97,8 +97,13 @@ fun LinkifyText(
                             lineHeight = lineHeight.sp
                         ),
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(part.url))
-                            context.startActivity(intent)
+                            if (isYouTubeUrl(part.url)) {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(part.url))
+                                context.startActivity(intent)
+                            } else {
+                                val intent = WebViewActivity.createIntent(context, part.url)
+                                context.startActivity(intent)
+                            }
                         }
                     )
                     

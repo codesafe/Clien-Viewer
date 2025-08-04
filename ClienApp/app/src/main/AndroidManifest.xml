@@ -36,6 +36,10 @@
             android:name=".BoardDetailActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".WebViewActivity"
+            android:exported="false" />
+
     </application>
 
 </manifest>
