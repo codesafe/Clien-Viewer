@@ -85,14 +85,12 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
 
     // 초기 로드
     LaunchedEffect(boardUrl) {
-        if (posts.isEmpty()) { // Only fetch if posts are not already loaded
-            scope.launch {
-                isLoading = true
-                posts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = false)
-                currentPage = 0
-                hasMorePages = true
-                isLoading = false
-            }
+        scope.launch {
+            isLoading = true
+            posts = repository.fetchBoardPosts(boardUrl, page = 0, forceRefresh = true)
+            currentPage = 0
+            hasMorePages = true
+            isLoading = false
         }
     }
 

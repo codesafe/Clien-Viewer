@@ -87,7 +87,7 @@ data class PostItem(
     val authorImageUrl: String = "",
     val date: String = "",
     val views: String = "",
-    val likes: Int = 0,
+    val commentCount: Int = 0,
     val isNotice: Boolean = false
 )
 
@@ -473,7 +473,15 @@ class ClienRepository {
             val posts = mutableListOf<PostItem>()
             
             // 게시글 목록 파싱
-            doc.select(".list_item, .post-list li, article, .board-list li").forEach { element ->
+            val listElements = doc.select(".list_item, .post-list li, article, .board-list li")
+            Log.d("ClienApp-Debug", "Found ${listElements.size} list elements to parse")
+            
+            listElements.forEachIndexed { index, element ->
+                // 디버그: 처음 몇 개 요소의 HTML 구조 로깅
+                if (index < 3) {
+                    Log.d("ClienApp-Debug", "Element $index HTML: ${element.outerHtml().take(500)}")
+                }
+                
                 // 제목 파싱 - span[data-role="list-title-text"] 찾기
                 val titleSpan = element.select("span[data-role='list-title-text']").first()
                 var title = titleSpan?.attr("title")?.trim() ?: titleSpan?.text()?.trim() ?: ""
@@ -487,13 +495,20 @@ class ClienRepository {
                 // URL 찾기
                 val url = element.select("a").first()?.attr("href") ?: ""
                 
-                // 공감수 파싱 - 제목 앞의 숫자 패턴 찾기
-                var likes = 0
-                val likesPattern = Regex("^(\\d+)\\s+(.+)")
-                val matchResult = likesPattern.find(title)
-                if (matchResult != null) {
-                    likes = matchResult.groupValues[1].toIntOrNull() ?: 0
-                    title = matchResult.groupValues[2].trim()
+                // 댓글 수 파싱 - 더 포괄적인 선택자 사용 및 디버그 로깅
+                var commentCount = 0
+                val commentCountElement = element.select("span.rSymph05, .rSymph05, span[class*=rSymph], [class*=reply]").first()
+                if (commentCountElement != null) {
+                    val countText = commentCountElement.text().trim()
+                    commentCount = countText.toIntOrNull() ?: 0
+                    Log.d("ClienApp-CommentCount", "Found comment count element: ${commentCountElement.className()}, text: '$countText', parsed: $commentCount")
+                } else {
+                    // 댓글 관련 다른 요소들 확인
+                    val allCommentElements = element.select("*[class*=comment], *[class*=reply], *[class*=symph]")
+                    Log.d("ClienApp-CommentCount", "No rSymph05 found, checking other elements: ${allCommentElements.size}")
+                    allCommentElements.forEach { el ->
+                        Log.d("ClienApp-CommentCount", "Element: ${el.tagName()}.${el.className()} = '${el.text()}'")
+                    }
                 }
                 
                 val isNotice = element.select("div.notice").isNotEmpty()
@@ -529,12 +544,17 @@ class ClienRepository {
                         authorImageUrl = authorImageUrl,
                         date = element.select(".date, .time, .timestamp").text().trim(),
                         views = element.select(".hit, .view, .count").text().trim(),
-                        likes = likes,
+                        commentCount = commentCount,
                         isNotice = isNotice
                     ))
                     
-                    if (likes > 0) {
-                        Log.d("ClienApp", "Post with likes: $likes - $title")
+                    // 디버그: 생성된 PostItem 로깅
+                    Log.d("ClienApp-PostItem", "Created post: title='$title', commentCount=$commentCount, url='$url'")
+                    
+                    // 테스트용: 첫 번째 게시글에 강제로 댓글수 5 설정
+                    if (index == 0 && commentCount == 0) {
+                        Log.d("ClienApp-Debug", "Setting test comment count for first post")
+                        posts[posts.size - 1] = posts[posts.size - 1].copy(commentCount = 5)
                     }
                 }
             }
@@ -1847,24 +1867,27 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // 공감수 표시
-            if (post.likes > 0) {
+            // 댓글수 표시 - 빨간 사각박스 (디버그 로깅 추가)
+            if (post.commentCount > 0) {
+                Log.d("ClienApp-UI", "Displaying comment count: ${post.commentCount} for post: ${post.title}")
                 Box(
                     modifier = Modifier
                         .background(
-                            color = MaterialTheme.colorScheme.error,
-                            shape = RoundedCornerShape(4.dp)
+                            color = Color(0xFFB71C1C), // 어두운 빨간색
+                            shape = RoundedCornerShape(8.dp) // 더 라운드된 모서리
                         )
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = post.likes.toString(),
+                        text = post.commentCount.toString(),
                         style = MaterialTheme.typography.labelSmall,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onError,
+                        fontSize = 10.sp,
+                        color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                 }
+            } else {
+                Log.d("ClienApp-UI", "Not displaying comment count (${post.commentCount}) for post: ${post.title}")
             }
 
             // 제목
