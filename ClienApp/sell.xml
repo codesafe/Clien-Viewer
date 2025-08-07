@@ -1,0 +1,16 @@
+<div class="market_product">
+	<div class="product_table">
+		<span class="product_title">거래방법</span>
+		<span class="product_info">
+			직거래&nbsp;
+		</span>
+	</div>
+	<div class="product_table"><span class="product_title">판매상태</span><span class="product_info cursor" title="신품">신품</span></div>
+		<div class="product_table sell"><span class="product_title">판매가격</span><span class="product_info"><strong>9000</strong> 원</span></div>
+	<div class="product_table"><span class="product_title">구매시기</span><span class="product_info">신품</span></div>
+
+	<div class="product_table">
+		<span class="product_title">거래지역</span><span class="product_info">온라인거래</span>
+	</div>
+
+</div> 

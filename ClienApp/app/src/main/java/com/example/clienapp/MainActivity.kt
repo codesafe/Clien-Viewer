@@ -82,6 +82,14 @@ data class MenuItem(
     val description: String = ""
 )
 
+data class MarketInfo(
+    val tradeMethod: String = "",      // 거래방법
+    val saleStatus: String = "",       // 판매상태
+    val price: String = "",            // 판매가격
+    val purchaseDate: String = "",     // 구매시기
+    val tradeLocation: String = ""     // 거래지역
+)
+
 data class PostItem(
     val title: String,
     val url: String,
@@ -116,7 +124,8 @@ data class PostDetail(
     val date: String = "",
     val views: String = "",
     val comments: List<Comment> = emptyList(),
-    val nextPageUrl: String? = null
+    val nextPageUrl: String? = null,
+    val marketInfo: MarketInfo? = null  // 사고팔고 게시판 정보
 )
 
 data class LoginResult(
@@ -963,6 +972,12 @@ class ClienRepository {
             NetworkLogger.logDebug("ClienApp", "Found ${comments.size} comments total")
             
             val nextPageUrl = doc.select("a.button-next").first()?.attr("href")
+            
+            // 사고팔고 게시판인지 확인하고 MarketInfo 파싱
+            val marketInfo = if (postUrl.contains("/sold")) {
+                Log.d("ClienApp-MarketInfo", "Parsing market info for post detail: $postUrl")
+                parseMarketInfoFromDetail(doc)
+            } else null
 
             val postDetail = PostDetail(
                 title = title,
@@ -976,7 +991,8 @@ class ClienRepository {
                 date = date,
                 views = views,
                 comments = comments,
-                nextPageUrl = nextPageUrl
+                nextPageUrl = nextPageUrl,
+                marketInfo = marketInfo
             )
             
             // 캐시에 저장
@@ -988,6 +1004,69 @@ class ClienRepository {
             Log.e("ClienApp", "Error fetching post detail: ${e.message}")
             null
         }
+    }
+}
+
+// 사고팔고 게시판의 게시글 상세에서 MarketInfo 파싱
+fun parseMarketInfoFromDetail(doc: org.jsoup.nodes.Document): MarketInfo? {
+    return try {
+        Log.d("ClienApp-MarketInfo", "Parsing market info from post detail")
+        
+        // .market_product 클래스 찾기
+        val marketProductDiv = doc.select(".market_product").first()
+        
+        if (marketProductDiv != null) {
+            Log.d("ClienApp-MarketInfo", "Found market product div")
+            Log.d("ClienApp-MarketInfo", "Market product HTML: ${marketProductDiv.outerHtml().take(500)}")
+            
+            var tradeMethod = ""
+            var saleStatus = ""
+            var price = ""
+            var purchaseDate = ""
+            var tradeLocation = ""
+            
+            // product_table들을 순회하면서 정보 추출
+            val productTables = marketProductDiv.select(".product_table")
+            Log.d("ClienApp-MarketInfo", "Found ${productTables.size} product tables")
+            
+            productTables.forEachIndexed { index, table ->
+                val titleElement = table.select(".product_title").first()
+                val infoElement = table.select(".product_info").first()
+                
+                Log.d("ClienApp-MarketInfo", "Table $index - Title: ${titleElement?.text()}, Info: ${infoElement?.text()}")
+                
+                if (titleElement != null && infoElement != null) {
+                    val titleText = titleElement.text().trim()
+                    val infoText = infoElement.text().trim()
+                    
+                    when (titleText) {
+                        "거래방법" -> tradeMethod = infoText
+                        "판매상태" -> saleStatus = infoText
+                        "판매가격" -> price = infoText
+                        "구매시기" -> purchaseDate = infoText
+                        "거래지역" -> tradeLocation = infoText
+                    }
+                }
+            }
+            
+            val marketInfo = MarketInfo(
+                tradeMethod = tradeMethod,
+                saleStatus = saleStatus,
+                price = price,
+                purchaseDate = purchaseDate,
+                tradeLocation = tradeLocation
+            )
+            
+            Log.d("ClienApp-MarketInfo", "Parsed market info: $marketInfo")
+            return marketInfo
+        } else {
+            Log.d("ClienApp-MarketInfo", "No market product div found in post detail")
+            Log.d("ClienApp-MarketInfo", "Document HTML (first 1000 chars): ${doc.outerHtml().take(1000)}")
+            return null
+        }
+    } catch (e: Exception) {
+        Log.e("ClienApp-MarketInfo", "Error parsing market info from detail: ${e.message}", e)
+        null
     }
 }
 
@@ -1511,6 +1590,12 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                                         )
                                     }
                                 }
+                            }
+
+                            // 3. 사고팔고 게시판 정보 표시
+                            postDetail!!.marketInfo?.let { marketInfo ->
+                                Spacer(modifier = Modifier.height(8.dp))
+                                MarketInfoTable(marketInfo = marketInfo)
                             }
 
                             // 내용 전 가로 라인
@@ -2069,6 +2154,111 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Composable
+fun MarketInfoTable(marketInfo: MarketInfo) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp)
+        ) {
+            // 거래방법과 판매상태를 한 줄에
+            if (marketInfo.tradeMethod.isNotEmpty() || marketInfo.saleStatus.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    if (marketInfo.tradeMethod.isNotEmpty()) {
+                        MarketInfoItem(
+                            label = "거래방법",
+                            value = marketInfo.tradeMethod,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (marketInfo.saleStatus.isNotEmpty()) {
+                        MarketInfoItem(
+                            label = "판매상태",
+                            value = marketInfo.saleStatus,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+            
+            // 판매가격과 구매시기를 한 줄에
+            if (marketInfo.price.isNotEmpty() || marketInfo.purchaseDate.isNotEmpty()) {
+                if (marketInfo.tradeMethod.isNotEmpty() || marketInfo.saleStatus.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    if (marketInfo.price.isNotEmpty()) {
+                        MarketInfoItem(
+                            label = "판매가격",
+                            value = marketInfo.price,
+                            modifier = Modifier.weight(1f),
+                            isPrice = true
+                        )
+                    }
+                    if (marketInfo.purchaseDate.isNotEmpty()) {
+                        MarketInfoItem(
+                            label = "구매시기",
+                            value = marketInfo.purchaseDate,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+            
+            // 거래지역
+            if (marketInfo.tradeLocation.isNotEmpty()) {
+                if (marketInfo.tradeMethod.isNotEmpty() || marketInfo.saleStatus.isNotEmpty() || 
+                    marketInfo.price.isNotEmpty() || marketInfo.purchaseDate.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                MarketInfoItem(
+                    label = "거래지역",
+                    value = marketInfo.tradeLocation,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MarketInfoItem(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    isPrice: Boolean = false
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "$label:",
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            color = Color.Gray,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontSize = 10.sp,
+            color = if (isPrice) Color(0xFFE91E63) else Color.Black,
+            fontWeight = if (isPrice) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }
 
