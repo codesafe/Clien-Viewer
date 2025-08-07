@@ -73,6 +73,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.collectAsState
 
 data class MenuItem(
     val title: String,
@@ -1073,6 +1075,9 @@ fun ClienApp() {
                     onNavigateToLogin = {
                         navController.navigate("login")
                     },
+                    onNavigateToSettings = {
+                        navController.navigate("settings")
+                    },
                     refreshTrigger = refreshTrigger
                 )
             }
@@ -1094,6 +1099,39 @@ fun ClienApp() {
                     }
                 )
             }
+            
+            composable(
+                "settings",
+                enterTransition = { slideInHorizontally(animationSpec = tween(300)) { it } },
+                exitTransition = { slideOutHorizontally(animationSpec = tween(300)) { it } },
+                popEnterTransition = { slideInHorizontally(animationSpec = tween(300)) { -it } },
+                popExitTransition = { slideOutHorizontally(animationSpec = tween(300)) { -it } }
+            ) {
+                SettingsScreen(
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    onNavigateToPreview = {
+                        navController.navigate("preview")
+                    }
+                )
+            }
+            
+            composable(
+                "preview",
+                enterTransition = { slideInHorizontally(animationSpec = tween(300)) { it } },
+                exitTransition = { slideOutHorizontally(animationSpec = tween(300)) { it } },
+                popEnterTransition = { slideInHorizontally(animationSpec = tween(300)) { -it } },
+                popExitTransition = { slideOutHorizontally(animationSpec = tween(300)) { -it } }
+            ) {
+                val currentTheme by ColorThemeManager.currentTheme.collectAsState()
+                ThemePreviewScreen(
+                    theme = currentTheme,
+                    onBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
         }
     }
 }
@@ -1104,7 +1142,11 @@ fun ClienApp() {
 // 첫화면
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
+fun BoardListScreen(
+    onNavigateToLogin: () -> Unit, 
+    onNavigateToSettings: () -> Unit = {},
+    refreshTrigger: Int = 0
+) {
     var menuItems by remember { mutableStateOf<List<MenuItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var isLoggedIn by remember { mutableStateOf(SessionManager.isLoggedIn()) }
@@ -1112,6 +1154,7 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
     val scope = rememberCoroutineScope()
     var showDialog by remember { mutableStateOf(false) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val currentTheme by ColorThemeManager.currentTheme.collectAsState()
 
     fun refreshMenuList() {
         scope.launch {
@@ -1180,6 +1223,7 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
                     title = { 
                         Text(
                             text = "Clien 게시판",
+                            color = Color.White,
                             modifier = Modifier.clickable {
                                 scope.launch {
                                     listState.animateScrollToItem(0)
@@ -1187,9 +1231,15 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
                             }
                         )
                     },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = currentTheme.topBarBackgroundColor
+                    ),
                     actions = {
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = "설정", tint = Color.White)
+                        }
                         IconButton(onClick = { showDialog = true }) {
-                            Icon(Icons.Default.Add, contentDescription = "게시판 추가")
+                            Icon(Icons.Default.Add, contentDescription = "게시판 추가", tint = Color.White)
                         }
                         if (isLoggedIn) {
                             Row {
@@ -1197,7 +1247,7 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
                                     text = SessionManager.getUserInfo().takeIf { it.isNotEmpty() } ?: SessionManager.getUsername(),
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.align(Alignment.CenterVertically),
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = Color.White
                                 )
                                 IconButton(
                                     onClick = {
@@ -1205,12 +1255,12 @@ fun BoardListScreen(onNavigateToLogin: () -> Unit, refreshTrigger: Int = 0) {
                                         isLoggedIn = false
                                     }
                                 ) {
-                                    Icon(Icons.Filled.Person, contentDescription = "로그아웃", tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Filled.Person, contentDescription = "로그아웃", tint = Color.White)
                                 }
                             }
                         } else {
                             IconButton(onClick = onNavigateToLogin) {
-                                Icon(Icons.Filled.Person, contentDescription = "로그인")
+                                Icon(Icons.Filled.Person, contentDescription = "로그인", tint = Color.White)
                             }
                         }
                     }
@@ -1599,17 +1649,48 @@ fun ImageViewer(
     var offsetY by remember { mutableStateOf(0f) }
     
     val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp
-    val screenHeight = configuration.screenHeightDp
+    val screenWidth = configuration.screenWidthDp.toFloat()
+    val screenHeight = configuration.screenHeightDp.toFloat()
+    val density = LocalDensity.current
     
     val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
-        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
+        val newScale = (scale * zoomChange).coerceIn(0.5f, 10f)
         
-        val maxX = (screenWidth * scale - screenWidth) / 2
-        val maxY = (screenHeight * scale - screenHeight) / 2
+        // 확대/축소에 따른 오프셋 자동 조정 (더 자연스럽게)
+        if (zoomChange != 1f) {
+            // 줌 중심점을 기준으로 오프셋 조정
+            val scaleRatio = newScale / scale
+            offsetX *= scaleRatio
+            offsetY *= scaleRatio
+        }
         
-        offsetX = (offsetX + offsetChange.x).coerceIn(-maxX, maxX)
-        offsetY = (offsetY + offsetChange.y).coerceIn(-maxY, maxY)
+        // 새로운 스케일로 업데이트
+        scale = newScale
+        
+        // 확대 비율에 따른 더 자유로운 이동 범위 계산
+        val baseMovementRange = maxOf(screenWidth, screenHeight)
+        val scaleFactor = maxOf(1f, scale) // 최소 1배 보장
+        
+        // 확대될수록 더 넓은 범위로 이동 가능 (스케일에 비례)
+        val expandedMovementRange = baseMovementRange * scaleFactor * 0.8f
+        
+        // 스케일별 동적 이동 범위
+        val maxX = expandedMovementRange
+        val maxY = expandedMovementRange
+        
+        // 확대배율에 비례한 이동치 적용 (확대할수록 더 민감하게 이동)
+        val scaledOffsetChangeX = offsetChange.x * scale
+        val scaledOffsetChangeY = offsetChange.y * scale
+        
+        // 오프셋 업데이트 (이동 + 넓은 범위 제한)
+        offsetX = (offsetX + scaledOffsetChangeX).coerceIn(-maxX, maxX)
+        offsetY = (offsetY + scaledOffsetChangeY).coerceIn(-maxY, maxY)
+        
+        // 1배 이하일 때만 중앙으로 스냅 (확대된 상태에서는 자유롭게 이동)
+        if (scale <= 1f) {
+            offsetX = 0f
+            offsetY = 0f
+        }
     }
     
     Dialog(
@@ -1626,10 +1707,45 @@ fun ImageViewer(
                 .background(Color.Black.copy(alpha = 0.9f))
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onDoubleTap = {
-                            scale = if (scale > 1.5f) 1f else 2f
-                            offsetX = 0f
-                            offsetY = 0f
+                        onDoubleTap = { tapOffset ->
+                            val previousScale = scale
+                            val newScale = when {
+                                scale <= 1f -> 2.5f
+                                scale <= 2.5f -> 5f
+                                else -> 1f
+                            }
+                            
+                            if (newScale == 1f) {
+                                // 1배로 리셋할 때는 중앙으로
+                                scale = newScale
+                                offsetX = 0f
+                                offsetY = 0f
+                            } else {
+                                // 확대할 때는 탭한 지점을 중심으로 확대
+                                val scaleChange = newScale / previousScale
+                                
+                                // 화면 중심을 기준으로 한 탭 위치
+                                val centerX = size.width / 2f
+                                val centerY = size.height / 2f
+                                val tapX = tapOffset.x - centerX
+                                val tapY = tapOffset.y - centerY
+                                
+                                // 새로운 오프셋 계산 (탭한 지점이 화면 중앙에 오도록)
+                                offsetX = (offsetX - tapX) * scaleChange + tapX
+                                offsetY = (offsetY - tapY) * scaleChange + tapY
+                                scale = newScale
+                                
+                                // 동일한 범위 제한 적용 (확대될수록 더 넓은 이동 범위)
+                                val baseMovementRange = maxOf(screenWidth, screenHeight)
+                                val scaleFactor = maxOf(1f, scale)
+                                val expandedMovementRange = baseMovementRange * scaleFactor * 0.8f
+                                
+                                val maxX = expandedMovementRange
+                                val maxY = expandedMovementRange
+                                
+                                offsetX = offsetX.coerceIn(-maxX, maxX)
+                                offsetY = offsetY.coerceIn(-maxY, maxY)
+                            }
                         },
                         onTap = { onDismiss() }
                     )
@@ -1846,13 +1962,21 @@ fun MenuItemCard(item: MenuItem, isCustom: Boolean, onClick: () -> Unit, onLongC
 
 @Composable
 fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
+    val currentTheme by ColorThemeManager.currentTheme.collectAsState()
+    
     val backgroundColor = when {
-        post.isNotice -> Color(0xFFE0E0E0) // 공지글 배경색
-        isVisited -> Color(0xFFF0F0F0)
+        post.isNotice -> currentTheme.noticeBackgroundColor
+        isVisited -> currentTheme.visitedBackgroundColor
         else -> Color.White
     }
-    val titleColor = if (isVisited && !post.isNotice) Color.DarkGray else Color.Black
-    val metaColor = if (isVisited && !post.isNotice) Color.Gray else Color.DarkGray
+    
+    val titleColor = when {
+        post.isNotice -> currentTheme.noticeTextColor
+        isVisited -> currentTheme.visitedTextColor
+        else -> Color.Black
+    }
+    
+    val metaColor = if (isVisited && !post.isNotice) currentTheme.visitedTextColor else Color.DarkGray
 
     Column(
         modifier = Modifier
@@ -1867,14 +1991,14 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // 댓글수 표시 - 빨간 사각박스 (디버그 로깅 추가)
-            if (post.commentCount > 0) {
+            // 댓글수 표시 - 공지사항이 아닌 경우만 표시
+            if (post.commentCount > 0 && !post.isNotice) {
                 Log.d("ClienApp-UI", "Displaying comment count: ${post.commentCount} for post: ${post.title}")
                 Box(
                     modifier = Modifier
                         .background(
-                            color = Color(0xFF828282), // 어두운 빨간색
-                            shape = RoundedCornerShape(8.dp) // 더 라운드된 모서리
+                            color = currentTheme.commentCountBackgroundColor,
+                            shape = RoundedCornerShape(8.dp)
                         )
                         .padding(horizontal = 6.dp, vertical = 4.dp)
                 ) {
@@ -1882,7 +2006,7 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
                         text = post.commentCount.toString(),
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 10.sp,
-                        color = Color.Yellow,
+                        color = currentTheme.commentCountTextColor,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -2165,6 +2289,9 @@ class MainActivity : ComponentActivity() {
         
         // 캐시 관리자 초기화
         CacheManager.init(this)
+        
+        // 색상 테마 관리자 초기화
+        ColorThemeManager.init(this)
         
         // Coil 기본 이미지 로더 설정 (gif 지원 포함)
         val imageLoader = ImageLoader.Builder(this)

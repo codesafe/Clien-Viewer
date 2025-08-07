@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,6 +42,9 @@ class BoardDetailActivity : ComponentActivity() {
 
         Log.d("BoardDetailActivity", "Received boardUrl: $boardUrl, boardTitle: $boardTitle")
 
+        // 색상 테마 관리자 초기화
+        ColorThemeManager.init(this)
+        
         // Coil ImageLoader with unsafe SSL settings
         val imageLoader = ImageLoader.Builder(this)
             .components {
@@ -78,10 +82,11 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val swipeRefreshState = rememberSwipeRefreshState(isRefreshing)
-    val context = LocalContext.current // Add context for Intent
+    val context = LocalContext.current
     var dragDistance by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 84.dp.toPx() }
+    val currentTheme by ColorThemeManager.currentTheme.collectAsState()
 
     // 초기 로드
     LaunchedEffect(boardUrl) {
@@ -175,6 +180,7 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                         title = { 
                             Text(
                                 text = boardTitle,
+                                color = Color.White,
                                 modifier = Modifier.clickable {
                                     scope.launch {
                                         listState.animateScrollToItem(0)
@@ -184,9 +190,12 @@ fun BoardDetailScreen(boardUrl: String, boardTitle: String, onBack: () -> Unit) 
                         },
                         navigationIcon = {
                             IconButton(onClick = { onBack() }) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                                Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기", tint = Color.White)
                             }
-                        }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = currentTheme.topBarBackgroundColor
+                        )
                     )
                     Divider(thickness = 2.dp, color = Color.Black)
                 }
