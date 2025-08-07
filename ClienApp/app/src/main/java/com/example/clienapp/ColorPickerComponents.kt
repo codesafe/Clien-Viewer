@@ -65,48 +65,16 @@ fun PresetColorPicker(
     selectedColor: Color,
     onColorSelected: (Color) -> Unit
 ) {
-    val presetColors = listOf(
-        // 기본 Material Colors - 첫 번째 줄 (8개)
-        Color(0xFFF44336), Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF673AB7),
-        Color(0xFF3F51B5), Color(0xFF2196F3), Color(0xFF03DAC5), Color(0xFF009688),
-        
-        // 기본 Material Colors - 두 번째 줄 (8개)
-        Color(0xFF4CAF50), Color(0xFF8BC34A), Color(0xFFCDDC39), Color(0xFFFFEB3B),
-        Color(0xFFFFC107), Color(0xFFFF9800), Color(0xFFFF5722), Color(0xFF795548),
-        
-        // 그레이 스케일 - 세 번째 줄 (8개)
-        Color(0xFF000000), Color(0xFF212121), Color(0xFF424242), Color(0xFF616161),
-        Color(0xFF757575), Color(0xFF9E9E9E), Color(0xFFBDBDBD), Color(0xFFFFFFFF),
-        
-        // 파스텔 색상 - 네 번째 줄 (8개)
-        Color(0xFFFFCDD2), Color(0xFFF8BBD9), Color(0xFFE1BEE7), Color(0xFFD1C4E9),
-        Color(0xFFC5CAE9), Color(0xFFBBDEFB), Color(0xFFB2EBF2), Color(0xFFB2DFDB),
-        
-        // 연한 색상 - 다섯 번째 줄 (8개)
-        Color(0xFFC8E6C9), Color(0xFFDCEDC8), Color(0xFFF0F4C3), Color(0xFFFFF9C4),
-        Color(0xFFFFECB3), Color(0xFFFFE0B2), Color(0xFFFFCCBC), Color(0xFFD7CCC8),
-        
-        // 진한 색상 - 여섯 번째 줄 (8개)
-        Color(0xFFB71C1C), Color(0xFF880E4F), Color(0xFF4A148C), Color(0xFF311B92),
-        Color(0xFF1A237E), Color(0xFF0D47A1), Color(0xFF01579B), Color(0xFF006064),
-        
-        // 자연 색상 - 일곱 번째 줄 (8개)
-        Color(0xFF1B5E20), Color(0xFF33691E), Color(0xFF827717), Color(0xFFF57F17),
-        Color(0xFFFF6F00), Color(0xFFE65100), Color(0xFFBF360C), Color(0xFF3E2723),
-        
-        // 특별 색상 - 여덟 번째 줄 (8개)
-        Color(0xFF263238), Color(0xFF37474F), Color(0xFF455A64), Color(0xFF546E7A),
-        Color(0xFF78909C), Color(0xFF90A4AE), Color(0xFFB0BEC5), Color(0xFFCFD8DC)
-    )
+    val presetColors = generateRGBPresetColors()
     
     LazyVerticalGrid(
-        columns = GridCells.Fixed(8),
+        columns = GridCells.Fixed(16),
         contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(presetColors) { color ->
-            ColorItem(
+            RectangleColorItem(
                 color = color,
                 isSelected = color == selectedColor,
                 onClick = { onColorSelected(color) }
@@ -115,25 +83,85 @@ fun PresetColorPicker(
     }
 }
 
+private fun generateRGBPresetColors(): List<Color> {
+    val colors = mutableListOf<Color>()
+    
+    // RGB 색상환을 기반으로 128가지 색상 생성
+    // 8x16 그리드로 구성
+    
+    // 첫 번째 그룹: 순수 RGB 및 CMY 조합 (32개)
+    val primarySteps = listOf(0, 85, 170, 255)
+    for (r in primarySteps) {
+        for (g in primarySteps) {
+            for (b in primarySteps) {
+                if (colors.size < 32) {
+                    colors.add(Color(r, g, b))
+                }
+            }
+        }
+    }
+    
+    // 두 번째 그룹: HSV 기반 색상환 (48개)
+    for (i in 0 until 48) {
+        val hue = (i * 7.5f) % 360f // 360도를 48등분
+        val saturation = when {
+            i < 24 -> 1.0f // 순수 색상
+            else -> 0.7f // 약간 흐린 색상
+        }
+        val value = when {
+            i < 24 -> 1.0f
+            else -> 0.8f
+        }
+        colors.add(Color.hsv(hue, saturation, value))
+    }
+    
+    // 세 번째 그룹: 그레이스케일 및 중간 톤 (48개)
+    // 그레이스케일 16개
+    for (i in 0 until 16) {
+        val gray = (i * 255 / 15)
+        colors.add(Color(gray, gray, gray))
+    }
+    
+    // 중간 톤 색상들 32개
+    val midTones = listOf(
+        // 따뜻한 톤
+        Color(139, 69, 19), Color(160, 82, 45), Color(210, 180, 140), Color(222, 184, 135),
+        Color(245, 245, 220), Color(255, 228, 196), Color(255, 218, 185), Color(255, 160, 122),
+        
+        // 차가운 톤
+        Color(25, 25, 112), Color(65, 105, 225), Color(70, 130, 180), Color(100, 149, 237),
+        Color(135, 206, 235), Color(135, 206, 250), Color(173, 216, 230), Color(176, 196, 222),
+        
+        // 자연 톤
+        Color(34, 139, 34), Color(107, 142, 35), Color(124, 252, 0), Color(127, 255, 0),
+        Color(173, 255, 47), Color(154, 205, 50), Color(85, 107, 47), Color(128, 128, 0),
+        
+        // 보라/핑크 톤
+        Color(128, 0, 128), Color(147, 112, 219), Color(138, 43, 226), Color(148, 0, 211),
+        Color(186, 85, 211), Color(221, 160, 221), Color(238, 130, 238), Color(255, 20, 147)
+    )
+    colors.addAll(midTones)
+    
+    return colors.take(128)
+}
+
 @Composable
 fun CustomColorPicker(
     selectedColor: Color,
     onColorSelected: (Color) -> Unit
 ) {
-    var hue by remember { mutableStateOf(0f) }
-    var saturation by remember { mutableStateOf(1f) }
-    var value by remember { mutableStateOf(1f) }
+    var red by remember { mutableStateOf(0) }
+    var green by remember { mutableStateOf(0) }
+    var blue by remember { mutableStateOf(0) }
     
     LaunchedEffect(selectedColor) {
-        val hsv = FloatArray(3)
-        android.graphics.Color.colorToHSV(selectedColor.toArgb(), hsv)
-        hue = hsv[0]
-        saturation = hsv[1]
-        value = hsv[2]
+        red = (selectedColor.red * 255).toInt()
+        green = (selectedColor.green * 255).toInt()
+        blue = (selectedColor.blue * 255).toInt()
     }
     
-    LaunchedEffect(hue, saturation, value) {
-        val color = Color.hsv(hue, saturation, value)
+    LaunchedEffect(red, green, blue) {
+        val color = Color(red, green, blue)
         onColorSelected(color)
     }
     
@@ -141,13 +169,25 @@ fun CustomColorPicker(
         modifier = Modifier.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // RGB 색상 정사각형 선택기
+        RGBColorSquare(
+            red = red,
+            green = green,
+            blue = blue,
+            onColorChange = { newRed, newGreen, newBlue ->
+                red = newRed
+                green = newGreen
+                blue = newBlue
+            }
+        )
+        
         // 색상 미리보기
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp)
                 .background(
-                    Color.hsv(hue, saturation, value),
+                    Color(red, green, blue),
                     RoundedCornerShape(8.dp)
                 )
                 .border(
@@ -157,50 +197,140 @@ fun CustomColorPicker(
                 )
         )
         
-        // 색조(Hue) 슬라이더
-        Text("색조", fontWeight = FontWeight.Medium)
-        HueSlider(
-            hue = hue,
-            onHueChange = { newHue ->
-                hue = newHue
-            }
-        )
-        
-        // 채도(Saturation) 슬라이더  
-        Text("채도", fontWeight = FontWeight.Medium)
+        // Red 슬라이더
+        Text("Red: $red", fontWeight = FontWeight.Medium)
         Slider(
-            value = saturation,
-            onValueChange = { newSaturation ->
-                saturation = newSaturation
+            value = red.toFloat(),
+            onValueChange = { newRed ->
+                red = newRed.toInt()
             },
-            valueRange = 0f..1f,
+            valueRange = 0f..255f,
             colors = SliderDefaults.colors(
-                thumbColor = Color.hsv(hue, saturation, value),
-                activeTrackColor = Color.hsv(hue, 0.8f, value),
-                inactiveTrackColor = Color.hsv(hue, 0.2f, value)
+                thumbColor = Color(red, 0, 0),
+                activeTrackColor = Color(255, 0, 0),
+                inactiveTrackColor = Color(100, 0, 0)
             )
         )
         
-        // 명도(Value) 슬라이더
-        Text("명도", fontWeight = FontWeight.Medium)
+        // Green 슬라이더
+        Text("Green: $green", fontWeight = FontWeight.Medium)
         Slider(
-            value = value,
-            onValueChange = { newValue ->
-                value = newValue
+            value = green.toFloat(),
+            onValueChange = { newGreen ->
+                green = newGreen.toInt()
             },
-            valueRange = 0f..1f,
+            valueRange = 0f..255f,
             colors = SliderDefaults.colors(
-                thumbColor = Color.hsv(hue, saturation, value),
-                activeTrackColor = Color.hsv(hue, saturation, 0.8f),
-                inactiveTrackColor = Color.hsv(hue, saturation, 0.2f)
+                thumbColor = Color(0, green, 0),
+                activeTrackColor = Color(0, 255, 0),
+                inactiveTrackColor = Color(0, 100, 0)
+            )
+        )
+        
+        // Blue 슬라이더
+        Text("Blue: $blue", fontWeight = FontWeight.Medium)
+        Slider(
+            value = blue.toFloat(),
+            onValueChange = { newBlue ->
+                blue = newBlue.toInt()
+            },
+            valueRange = 0f..255f,
+            colors = SliderDefaults.colors(
+                thumbColor = Color(0, 0, blue),
+                activeTrackColor = Color(0, 0, 255),
+                inactiveTrackColor = Color(0, 0, 100)
             )
         )
         
         // RGB 값 표시
         Text(
-            text = "RGB: ${(selectedColor.red * 255).toInt()}, ${(selectedColor.green * 255).toInt()}, ${(selectedColor.blue * 255).toInt()}",
+            text = "RGB: $red, $green, $blue",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        // HEX 값 표시
+        Text(
+            text = "HEX: #${String.format("%02X%02X%02X", red, green, blue)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun RGBColorSquare(
+    red: Int,
+    green: Int,
+    blue: Int,
+    onColorChange: (Int, Int, Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val x = offset.x.coerceIn(0f, size.width.toFloat())
+                    val y = offset.y.coerceIn(0f, size.height.toFloat())
+                    
+                    val newRed = (x / size.width * 255).toInt().coerceIn(0, 255)
+                    val newGreen = (255 - (y / size.height * 255)).toInt().coerceIn(0, 255)
+                    
+                    onColorChange(newRed, newGreen, blue)
+                }
+            }
+            .pointerInput(Unit) {
+                detectDragGestures { _, dragAmount ->
+                    val sensitivity = 2f
+                    val newRed = (red + dragAmount.x * sensitivity).toInt().coerceIn(0, 255)
+                    val newGreen = (green - dragAmount.y * sensitivity).toInt().coerceIn(0, 255)
+                    
+                    onColorChange(newRed, newGreen, blue)
+                }
+            }
+    ) {
+        val canvasWidth = size.width
+        val canvasHeight = size.height
+        
+        // RGB 색상 정사각형 그리기 (Red-Green 평면)
+        for (x in 0 until canvasWidth.toInt() step 4) {
+            for (y in 0 until canvasHeight.toInt() step 4) {
+                val r = (x / canvasWidth * 255).toInt().coerceIn(0, 255)
+                val g = (255 - (y / canvasHeight * 255)).toInt().coerceIn(0, 255)
+                val b = blue
+                
+                drawRect(
+                    color = Color(r, g, b),
+                    topLeft = Offset(x.toFloat(), y.toFloat()),
+                    size = androidx.compose.ui.geometry.Size(4f, 4f)
+                )
+            }
+        }
+        
+        // 현재 선택된 위치 표시
+        val selectedX = (red / 255f * canvasWidth).coerceIn(0f, canvasWidth)
+        val selectedY = ((255 - green) / 255f * canvasHeight).coerceIn(0f, canvasHeight)
+        
+        // 선택 표시 (외곽 원)
+        drawCircle(
+            color = Color.White,
+            radius = 12f,
+            center = Offset(selectedX, selectedY),
+            style = Stroke(width = 3f)
+        )
+        
+        // 선택 표시 (내부 원)
+        drawCircle(
+            color = Color.Black,
+            radius = 8f,
+            center = Offset(selectedX, selectedY),
+            style = Stroke(width = 2f)
         )
     }
 }
@@ -302,6 +432,37 @@ fun ColorItem(
                 contentDescription = "선택됨",
                 tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
                 modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun RectangleColorItem(
+    color: Color,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(width = 20.dp, height = 20.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(color)
+            .border(
+                width = if (isSelected) 2.dp else 0.5.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(3.dp)
+            )
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "선택됨",
+                tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                modifier = Modifier.size(12.dp)
             )
         }
     }
