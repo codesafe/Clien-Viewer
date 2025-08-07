@@ -116,13 +116,13 @@ fun PreviewPostItemCard(
     val backgroundColor = when {
         post.isNotice -> theme.noticeBackgroundColor
         isVisited -> theme.visitedBackgroundColor
-        else -> Color.White
+        else -> theme.postTitleBackgroundColor
     }
     
     val titleColor = when {
         post.isNotice -> theme.noticeTextColor
         isVisited -> theme.visitedTextColor
-        else -> Color.Black
+        else -> theme.postTitleTextColor
     }
     
     val metaColor = if (isVisited && !post.isNotice) theme.visitedTextColor else Color.DarkGray
@@ -246,6 +246,42 @@ fun ColorThemePreview(
                 Text(
                     text = "공지사항 제목",
                     color = theme.noticeTextColor,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            // 일반 글 미리보기
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        theme.postTitleBackgroundColor,
+                        RoundedCornerShape(4.dp)
+                    )
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(
+                            theme.commentCountBackgroundColor,
+                            RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "5",
+                        color = theme.commentCountTextColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = "일반 글 제목",
+                    color = theme.postTitleTextColor,
                     fontSize = 12.sp,
                     modifier = Modifier.weight(1f)
                 )

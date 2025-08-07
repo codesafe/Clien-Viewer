@@ -8,9 +8,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,6 +32,7 @@ import kotlin.math.*
 fun ColorPicker(
     selectedColor: Color,
     onColorSelected: (Color) -> Unit,
+    onCancel: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -55,7 +53,7 @@ fun ColorPicker(
         
         when (selectedTab) {
             0 -> PresetColorPicker(selectedColor, onColorSelected)
-            1 -> CustomColorPicker(selectedColor, onColorSelected)
+            1 -> CustomColorPicker(selectedColor, onColorSelected, onCancel)
         }
     }
 }
@@ -66,19 +64,33 @@ fun PresetColorPicker(
     onColorSelected: (Color) -> Unit
 ) {
     val presetColors = generateRGBPresetColors()
+    val columns = 16
+    val rows = (presetColors.size + columns - 1) / columns
     
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(16),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    Column(
+        modifier = Modifier.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        items(presetColors) { color ->
-            RectangleColorItem(
-                color = color,
-                isSelected = color == selectedColor,
-                onClick = { onColorSelected(color) }
-            )
+        repeat(rows) { rowIndex ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                repeat(columns) { colIndex ->
+                    val index = rowIndex * columns + colIndex
+                    if (index < presetColors.size) {
+                        val color = presetColors[index]
+                        RectangleColorItem(
+                            color = color,
+                            isSelected = color == selectedColor,
+                            onClick = { onColorSelected(color) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
         }
     }
 }
@@ -148,46 +160,36 @@ private fun generateRGBPresetColors(): List<Color> {
 @Composable
 fun CustomColorPicker(
     selectedColor: Color,
-    onColorSelected: (Color) -> Unit
+    onColorSelected: (Color) -> Unit,
+    onCancel: () -> Unit = {}
 ) {
     var red by remember { mutableStateOf(0) }
     var green by remember { mutableStateOf(0) }
     var blue by remember { mutableStateOf(0) }
+    var tempColor by remember { mutableStateOf(selectedColor) }
     
     LaunchedEffect(selectedColor) {
         red = (selectedColor.red * 255).toInt()
         green = (selectedColor.green * 255).toInt()
         blue = (selectedColor.blue * 255).toInt()
+        tempColor = selectedColor
     }
     
     LaunchedEffect(red, green, blue) {
-        val color = Color(red, green, blue)
-        onColorSelected(color)
+        tempColor = Color(red, green, blue)
     }
     
     Column(
         modifier = Modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // RGB 색상 정사각형 선택기
-        RGBColorSquare(
-            red = red,
-            green = green,
-            blue = blue,
-            onColorChange = { newRed, newGreen, newBlue ->
-                red = newRed
-                green = newGreen
-                blue = newBlue
-            }
-        )
-        
         // 색상 미리보기
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp)
                 .background(
-                    Color(red, green, blue),
+                    tempColor,
                     RoundedCornerShape(8.dp)
                 )
                 .border(
@@ -249,12 +251,24 @@ fun CustomColorPicker(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         
-        // HEX 값 표시
-        Text(
-            text = "HEX: #${String.format("%02X%02X%02X", red, green, blue)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // 적용/취소 버튼
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("취소")
+            }
+            Button(
+                onClick = { onColorSelected(tempColor) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("적용")
+            }
+        }
     }
 }
 
@@ -446,7 +460,7 @@ fun RectangleColorItem(
 ) {
     Box(
         modifier = modifier
-            .size(width = 20.dp, height = 20.dp)
+            .aspectRatio(1f)
             .clip(RoundedCornerShape(3.dp))
             .background(color)
             .border(
@@ -521,21 +535,12 @@ fun ColorSettingSection(
                 Column {
                     ColorPicker(
                         selectedColor = selectedColor,
-                        onColorSelected = onColorSelected,
-                        modifier = Modifier.height(300.dp)
+                        onColorSelected = { color ->
+                            onColorSelected(color)
+                            showColorPicker = false
+                        },
+                        onCancel = { showColorPicker = false }
                     )
-                    
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = { showColorPicker = false }) {
-                            Text("완료")
-                        }
-                    }
                 }
             }
         }

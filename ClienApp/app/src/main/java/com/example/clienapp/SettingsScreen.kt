@@ -160,6 +160,48 @@ fun SettingsScreen(
                             }
                         )
                         
+                        ColorSettingSection(
+                            title = "글제목 글자색",
+                            description = "게시글 제목의 글자 색상",
+                            selectedColor = currentTheme.postTitleTextColor,
+                            onColorSelected = { color ->
+                                val newTheme = currentTheme.copy(postTitleTextColor = color)
+                                ColorThemeManager.updateTheme(newTheme)
+                            }
+                        )
+                        
+                        ColorSettingSection(
+                            title = "글제목 배경색",
+                            description = "게시글 제목의 배경 색상",
+                            selectedColor = currentTheme.postTitleBackgroundColor,
+                            onColorSelected = { color ->
+                                val newTheme = currentTheme.copy(postTitleBackgroundColor = color)
+                                ColorThemeManager.updateTheme(newTheme)
+                            }
+                        )
+                        
+                        Divider()
+                        
+                        ColorSettingSection(
+                            title = "글내용 상단 제목 글자색",
+                            description = "글 상세보기 상단 제목의 글자 색상",
+                            selectedColor = currentTheme.postDetailTitleTextColor,
+                            onColorSelected = { color ->
+                                val newTheme = currentTheme.copy(postDetailTitleTextColor = color)
+                                ColorThemeManager.updateTheme(newTheme)
+                            }
+                        )
+                        
+                        ColorSettingSection(
+                            title = "글내용 상단 제목 배경색",
+                            description = "글 상세보기 상단 제목의 배경 색상",
+                            selectedColor = currentTheme.postDetailTitleBackgroundColor,
+                            onColorSelected = { color ->
+                                val newTheme = currentTheme.copy(postDetailTitleBackgroundColor = color)
+                                ColorThemeManager.updateTheme(newTheme)
+                            }
+                        )
+                        
                         Divider()
                         
                         ColorSettingSection(

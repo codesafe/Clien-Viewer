@@ -1445,6 +1445,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
     val density = LocalDensity.current
     val swipeThreshold = with(density) { 100.dp.toPx() }
     val scrollState = rememberScrollState()
+    val currentTheme by ColorThemeManager.currentTheme.collectAsState()
 
     // 초기 로드 (캐시 우선 확인)
     LaunchedEffect(postUrl) {
@@ -1551,11 +1552,22 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                                 .padding(8.dp)
                         ) {
                             // 1. 제목
-                            Text(
-                                text = postDetail!!.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        currentTheme.postDetailTitleBackgroundColor,
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    text = postDetail!!.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = currentTheme.postDetailTitleTextColor
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(8.dp))
 
@@ -2052,13 +2064,13 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
     val backgroundColor = when {
         post.isNotice -> currentTheme.noticeBackgroundColor
         isVisited -> currentTheme.visitedBackgroundColor
-        else -> Color.White
+        else -> currentTheme.postTitleBackgroundColor
     }
     
     val titleColor = when {
         post.isNotice -> currentTheme.noticeTextColor
         isVisited -> currentTheme.visitedTextColor
-        else -> Color.Black
+        else -> currentTheme.postTitleTextColor
     }
     
     val metaColor = if (isVisited && !post.isNotice) currentTheme.visitedTextColor else Color.DarkGray

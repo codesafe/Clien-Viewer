@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class ColorTheme(
     val topBarBackgroundColor: Color = Color(0xFF2196F3),
+    val postTitleTextColor: Color = Color(0xFF000000),
+    val postTitleBackgroundColor: Color = Color(0xFFFFFFFF),
+    val postDetailTitleTextColor: Color = Color(0xFF000000),
+    val postDetailTitleBackgroundColor: Color = Color(0xFFFFFFFF),
     val noticeTextColor: Color = Color(0xFF1976D2),
     val noticeBackgroundColor: Color = Color(0xFFE3F2FD),
     val visitedTextColor: Color = Color(0xFF757575),
@@ -21,6 +25,10 @@ data class ColorTheme(
 object ColorThemeManager {
     private const val PREFS_NAME = "color_theme_preferences"
     private const val KEY_TOP_BAR_BG = "top_bar_background"
+    private const val KEY_POST_TITLE_TEXT = "post_title_text"
+    private const val KEY_POST_TITLE_BG = "post_title_background"
+    private const val KEY_POST_DETAIL_TITLE_TEXT = "post_detail_title_text"
+    private const val KEY_POST_DETAIL_TITLE_BG = "post_detail_title_background"
     private const val KEY_NOTICE_TEXT = "notice_text"
     private const val KEY_NOTICE_BG = "notice_background"
     private const val KEY_VISITED_TEXT = "visited_text"
@@ -40,6 +48,10 @@ object ColorThemeManager {
     private fun loadTheme() {
         _currentTheme.value = ColorTheme(
             topBarBackgroundColor = Color(prefs.getInt(KEY_TOP_BAR_BG, Color(0xFF2196F3).toArgb())),
+            postTitleTextColor = Color(prefs.getInt(KEY_POST_TITLE_TEXT, Color(0xFF000000).toArgb())),
+            postTitleBackgroundColor = Color(prefs.getInt(KEY_POST_TITLE_BG, Color(0xFFFFFFFF).toArgb())),
+            postDetailTitleTextColor = Color(prefs.getInt(KEY_POST_DETAIL_TITLE_TEXT, Color(0xFF000000).toArgb())),
+            postDetailTitleBackgroundColor = Color(prefs.getInt(KEY_POST_DETAIL_TITLE_BG, Color(0xFFFFFFFF).toArgb())),
             noticeTextColor = Color(prefs.getInt(KEY_NOTICE_TEXT, Color(0xFF1976D2).toArgb())),
             noticeBackgroundColor = Color(prefs.getInt(KEY_NOTICE_BG, Color(0xFFE3F2FD).toArgb())),
             visitedTextColor = Color(prefs.getInt(KEY_VISITED_TEXT, Color(0xFF757575).toArgb())),
@@ -52,6 +64,10 @@ object ColorThemeManager {
     fun updateTheme(newTheme: ColorTheme) {
         prefs.edit().apply {
             putInt(KEY_TOP_BAR_BG, newTheme.topBarBackgroundColor.toArgb())
+            putInt(KEY_POST_TITLE_TEXT, newTheme.postTitleTextColor.toArgb())
+            putInt(KEY_POST_TITLE_BG, newTheme.postTitleBackgroundColor.toArgb())
+            putInt(KEY_POST_DETAIL_TITLE_TEXT, newTheme.postDetailTitleTextColor.toArgb())
+            putInt(KEY_POST_DETAIL_TITLE_BG, newTheme.postDetailTitleBackgroundColor.toArgb())
             putInt(KEY_NOTICE_TEXT, newTheme.noticeTextColor.toArgb())
             putInt(KEY_NOTICE_BG, newTheme.noticeBackgroundColor.toArgb())
             putInt(KEY_VISITED_TEXT, newTheme.visitedTextColor.toArgb())
