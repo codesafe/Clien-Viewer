@@ -1873,16 +1873,16 @@ fun PostItemCard(post: PostItem, isVisited: Boolean, onClick: () -> Unit) {
                 Box(
                     modifier = Modifier
                         .background(
-                            color = Color(0xFFB71C1C), // 어두운 빨간색
+                            color = Color(0xFF828282), // 어두운 빨간색
                             shape = RoundedCornerShape(8.dp) // 더 라운드된 모서리
                         )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = post.commentCount.toString(),
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 10.sp,
-                        color = Color.White,
+                        color = Color.Yellow,
                         fontWeight = FontWeight.Bold
                     )
                 }

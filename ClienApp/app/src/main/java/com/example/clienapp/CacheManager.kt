@@ -11,7 +11,7 @@ object CacheManager {
     private val postsCache = ConcurrentHashMap<String, Pair<List<PostItem>, Long>>()
     private val postDetailCache = ConcurrentHashMap<String, Pair<PostDetail, Long>>()
     
-    private const val CACHE_DURATION = 60 * 60 * 1000L // 1시간
+    private const val CACHE_DURATION = 60 * 60 * 1000L * 10// 10시간
     private const val DISK_CACHE_DURATION = 24 * 60 * 60 * 1000L // 24시간 (디스크 캐시)
     
     private var sharedPrefs: SharedPreferences? = null
