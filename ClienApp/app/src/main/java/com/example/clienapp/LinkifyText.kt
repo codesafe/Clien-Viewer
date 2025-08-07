@@ -74,7 +74,8 @@ fun LinkifyText(
                             text = part.content,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = fontSize.sp,
-                                lineHeight = lineHeight.sp
+                                lineHeight = lineHeight.sp,
+                                lineBreak = androidx.compose.ui.text.style.LineBreak.Simple
                             )
                         )
                     }

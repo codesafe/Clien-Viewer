@@ -171,7 +171,8 @@ fun RenderNode(
                         text = node.text(),
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = fontSize.sp,
-                            lineHeight = lineHeight.sp
+                            lineHeight = lineHeight.sp,
+                            lineBreak = androidx.compose.ui.text.style.LineBreak.Simple
                         ),
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                     )
@@ -182,7 +183,8 @@ fun RenderNode(
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = fontSize.sp,
                             lineHeight = lineHeight.sp,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            lineBreak = androidx.compose.ui.text.style.LineBreak.Simple
                         )
                     )
                 }

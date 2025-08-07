@@ -1563,7 +1563,9 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                             ) {
                                 Text(
                                     text = postDetail!!.title,
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        lineBreak = androidx.compose.ui.text.style.LineBreak.Simple
+                                    ),
                                     fontWeight = FontWeight.Bold,
                                     color = currentTheme.postDetailTitleTextColor
                                 )
