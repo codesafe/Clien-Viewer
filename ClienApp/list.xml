@@ -24,6 +24,6 @@ nickname는 author에 글씨가 표시
 </div>
 <div class="list_author" data-role="list-author">
 <span class="memo none" data-role="list_memo"></span>
-<span class="nickname">불달걀튀김</span>
+<span class="nickname"></span>
 </div>
 </div>				
