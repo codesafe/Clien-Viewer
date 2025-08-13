@@ -9,7 +9,7 @@ nickimg는 author에 이미지가 표시
 </div>
 <div class="list_author" data-role="list-author">
 <span class="memo none" data-role="list_memo"></span>
-<span class="nickimg"><img src="https://edgio.clien.net/F94/1091337/45b921239656460685a.gif" alt="만기"/></span>
+<span class="nickimg"><img src="https://edgio.clien.net/F94/1091337/45b921239656460685a.gif" alt=""/></span>
 </div>
 </div>
 
