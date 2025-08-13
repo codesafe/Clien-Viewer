@@ -1,9 +1,8 @@
 댓글의 작성자 author가 text이고 언급
 <div class="comment_content" data-role="comment-content-150214315">
 	<div class="comment_view" data-comment-view="150214315">
-		샤아님// 나와서 폭풍성장 한 거죠.. <br>미숙아로 태어나면 일정기간 의료비 감면이 됩니다.
-		<input type="hidden" value="샤아님// 나와서 폭풍성장 한 거죠.. 
-		미숙아로 태어나면 일정기간 의료비 감면이 됩니다." data-comment-modify="150214315">
+	
+		<input type="hidden" value="됩니다." data-comment-modify="150214315">
 	</div>
 </div>
 
@@ -12,7 +11,7 @@
 <div class="comment_content" data-role="comment-content-150214327">
 	<div class="comment_view" data-comment-view="150214327">
 		<strong>@<img data-role='highlite' data-nick-id='chonox2' src='https://edgio.clien.net/F94/1086083/9377a4b495384ea88ce.gif' alt='샤아'></strong>님 미숙아보다는 이른둥이 아닐까요?? 저도 궁금하네요~
-		<input type="hidden" value="｢@샤아＊chonox2＊님｣ 미숙아보다는 이른둥이 아닐까요?? 저도 궁금하네요~" data-comment-modify="150214327">
+		<input type="hidden" value="저도 궁금하네요~" data-comment-modify="150214327">
 	</div>
 </div>
 			
