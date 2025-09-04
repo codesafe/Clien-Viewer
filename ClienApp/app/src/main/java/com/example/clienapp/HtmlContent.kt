@@ -3,6 +3,7 @@ package com.example.clienapp
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,9 +39,11 @@ fun HtmlContent(
     val doc = Jsoup.parse(htmlContent)
     val body = doc.body()
     
-    Column(modifier = modifier) {
-        body.childNodes().forEach { node ->
-            RenderNode(node, fontSize, lineHeight, onImageClick)
+    SelectionContainer {
+        Column(modifier = modifier) {
+            body.childNodes().forEach { node ->
+                RenderNode(node, fontSize, lineHeight, onImageClick)
+            }
         }
     }
 }
@@ -61,10 +64,13 @@ fun RenderNode(
                     NetworkLogger.logDebug("HtmlContent", "Skipping GIF text node: parent=${node.parent()?.toString()}")
                     return
                 }
-                LinkifyText(
+                androidx.compose.material3.Text(
                     text = text,
-                    fontSize = fontSize,
-                    lineHeight = lineHeight
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = fontSize.sp,
+                        lineHeight = lineHeight.sp,
+                        lineBreak = androidx.compose.ui.text.style.LineBreak.Simple
+                    )
                 )
             }
         }

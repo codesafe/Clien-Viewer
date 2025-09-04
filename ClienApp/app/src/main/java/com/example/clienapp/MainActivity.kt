@@ -4,6 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,16 +21,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.compose.NavHost
 import androidx.compose.ui.Alignment
 
@@ -1446,6 +1454,7 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
     val swipeThreshold = with(density) { 100.dp.toPx() }
     val scrollState = rememberScrollState()
     val currentTheme by ColorThemeManager.currentTheme.collectAsState()
+    val context = LocalContext.current
 
     // 초기 로드 (캐시 우선 확인)
     LaunchedEffect(postUrl) {
@@ -1619,19 +1628,57 @@ fun PostDetailScreen(postUrl: String, postTitle: String, onBack: () -> Unit) {
                             )
 
                             // 4. 내용 (HTML 내용이 있으면 HTML 렌더링, 없으면 일반 텍스트)
-                            if (postDetail!!.htmlContent.isNotEmpty()) {
-                                HtmlContent(
-                                    htmlContent = postDetail!!.htmlContent,
-                                    fontSize = 15,
-                                    lineHeight = 20,
-                                    onImageClick = { imageUrl -> selectedImageUrl = imageUrl }
-                                )
-                            } else {
-                                LinkifyText(
-                                    text = postDetail!!.content,
-                                    fontSize = 15,
-                                    lineHeight = 20
-                                )
+                            var showContentMenu by remember { mutableStateOf(false) }
+                            var menuPosition by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+                            
+                            Box {
+                                if (postDetail!!.htmlContent.isNotEmpty()) {
+                                    HtmlContent(
+                                        htmlContent = postDetail!!.htmlContent,
+                                        fontSize = 15,
+                                        lineHeight = 20,
+                                        onImageClick = { imageUrl -> selectedImageUrl = imageUrl },
+                                        modifier = Modifier.pointerInput(Unit) {
+                                            detectTapGestures(
+                                                onLongPress = { offset ->
+                                                    menuPosition = offset
+                                                    showContentMenu = true
+                                                }
+                                            )
+                                        }
+                                    )
+                                } else {
+                                    LinkifyText(
+                                        text = postDetail!!.content,
+                                        fontSize = 15,
+                                        lineHeight = 20,
+                                        modifier = Modifier.pointerInput(Unit) {
+                                            detectTapGestures(
+                                                onLongPress = { offset ->
+                                                    menuPosition = offset
+                                                    showContentMenu = true
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                                
+                                // 컨텐츠 메뉴
+                                if (showContentMenu) {
+                                    ContentContextMenu(
+                                        content = if (postDetail!!.htmlContent.isNotEmpty()) {
+                                            // HTML에서 텍스트만 추출
+                                            org.jsoup.Jsoup.parse(postDetail!!.htmlContent).text()
+                                        } else {
+                                            postDetail!!.content
+                                        },
+                                        onDismiss = { showContentMenu = false },
+                                        onCopyContent = { content ->
+                                            copyToClipboard(context, content, "글 내용")
+                                            showContentMenu = false
+                                        }
+                                    )
+                                }
                             }
 
 
@@ -2476,6 +2523,61 @@ fun LoginScreen(onBack: () -> Unit, onLoginSuccess: (String) -> Unit) {
             }
         }
     }
+}
+
+@Composable
+fun ContentContextMenu(
+    content: String,
+    onDismiss: () -> Unit,
+    onCopyContent: (String) -> Unit
+) {
+    Popup(
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(
+            focusable = true,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
+    ) {
+        Card(
+            modifier = Modifier.width(150.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(4.dp)
+            ) {
+                TextButton(
+                    onClick = { onCopyContent(content) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "복사",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "내용 복사",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun copyToClipboard(context: Context, text: String, label: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = ClipData.newPlainText(label, text)
+    clipboard.setPrimaryClip(clip)
+    Toast.makeText(context, "$label 복사됨", Toast.LENGTH_SHORT).show()
 }
 
 class MainActivity : ComponentActivity() {
