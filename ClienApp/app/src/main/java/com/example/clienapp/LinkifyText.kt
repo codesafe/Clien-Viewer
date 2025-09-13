@@ -32,6 +32,8 @@ import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import com.example.clienapp.YouTubePreview
+import com.example.clienapp.isYouTubeUrl
 
 @Composable
 fun LinkifyText(
@@ -80,56 +82,51 @@ fun LinkifyText(
     // 텍스트와 미리보기를 순서대로 표시
     Box(modifier = modifier) {
         Column {
-            SelectionContainer {
-                Column {
-                    parts.forEach { part ->
-                        when (part) {
-                            is TextPart.Text -> {
-                                if (part.content.isNotEmpty()) {
-                                    androidx.compose.material3.Text(
-                                        text = part.content,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontSize = fontSize.sp,
-                                            lineHeight = lineHeight.sp,
-                                            lineBreak = androidx.compose.ui.text.style.LineBreak.Simple
-                                        )
-                                    )
-                                }
-                            }
-                            is TextPart.Url -> {
-                                // URL은 선택 가능한 텍스트로 표시 (링크 기능은 긴 클릭으로만)
-                                androidx.compose.material3.Text(
-                                    text = part.url,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontSize = fontSize.sp,
-                                        lineHeight = lineHeight.sp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    ),
-                                    modifier = Modifier.pointerInput(part.url) {
-                                        detectTapGestures(
-                                            onTap = {
-                                                if (isYouTubeUrl(part.url)) {
-                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(part.url))
-                                                    context.startActivity(intent)
-                                                } else {
-                                                    val intent = WebViewActivity.createIntent(context, part.url)
-                                                    context.startActivity(intent)
-                                                }
-                                            },
-                                            onLongPress = { offset ->
-                                                contextMenuUrl = part.url
-                                                menuPosition = offset
-                                                showContextMenu = true
-                                            }
-                                        )
+            parts.forEach { part ->
+                when (part) {
+                    is TextPart.Text -> {
+                        if (part.content.isNotEmpty()) {
+                            androidx.compose.material3.Text(
+                                text = part.content,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = fontSize.sp,
+                                    lineHeight = lineHeight.sp,
+                                    lineBreak = androidx.compose.ui.text.style.LineBreak.Simple
+                                )
+                            )
+                        }
+                    }
+                    is TextPart.Url -> {
+                        // URL은 선택 가능한 텍스트로 표시 (링크 기능은 긴 클릭으로만)
+                        androidx.compose.material3.Text(
+                            text = part.url,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = fontSize.sp,
+                                lineHeight = lineHeight.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.pointerInput(part.url) {
+                                detectTapGestures(
+                                    onTap = {
+                                        if (isYouTubeUrl(part.url)) {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(part.url))
+                                            context.startActivity(intent)
+                                        } else {
+                                            val intent = WebViewActivity.createIntent(context, part.url)
+                                            context.startActivity(intent)
+                                        }
+                                    },
+                                    onLongPress = { offset ->
+                                        contextMenuUrl = part.url
+                                        menuPosition = offset
+                                        showContextMenu = true
                                     }
                                 )
                             }
-                        }
+                        )
                     }
                 }
             }
-            
             // URL 미리보기들은 SelectionContainer 밖에 표시
             parts.forEachIndexed { index, part ->
                 if (part is TextPart.Url) {
@@ -176,80 +173,7 @@ sealed class TextPart {
     data class Url(val url: String) : TextPart()
 }
 
-fun isYouTubeUrl(url: String): Boolean {
-    return url.contains("youtube.com/watch") || url.contains("youtu.be/")
-}
 
-fun shouldShowLinkPreview(url: String): Boolean {
-    // 미리보기를 지원할 사이트들 (성능을 위해 제한)
-    val supportedSites = listOf(
-        "naver.com", "daum.net", "google.com", "github.com",
-        "stackoverflow.com", "wikipedia.org", "reddit.com",
-        "twitter.com", "facebook.com", "instagram.com",
-        "news.mt.co.kr", "chosun.com", "donga.com", "joongang.co.kr"
-    )
-    
-    return supportedSites.any { site -> url.contains(site, ignoreCase = true) }
-}
-
-fun extractYouTubeVideoId(url: String): String? {
-    return when {
-        url.contains("youtube.com/watch") -> {
-            val uri = Uri.parse(url)
-            uri.getQueryParameter("v")
-        }
-        url.contains("youtu.be/") -> {
-            url.substringAfter("youtu.be/").substringBefore("?")
-        }
-        else -> null
-    }
-}
-
-@Composable
-fun YouTubePreview(url: String) {
-    val videoId = extractYouTubeVideoId(url) ?: return
-    val context = LocalContext.current
-    
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .clickable {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
-                context.startActivity(intent)
-            },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // YouTube 썸네일 이미지
-            AsyncImage(
-                model = "https://img.youtube.com/vi/$videoId/hqdefault.jpg",
-                contentDescription = "YouTube 비디오 썸네일",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            
-            // 재생 버튼 오버레이
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f))
-            )
-            
-            // 재생 아이콘
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = "재생",
-                modifier = Modifier
-                    .size(60.dp)
-                    .align(Alignment.Center),
-                tint = Color.White
-            )
-        }
-    }
-}
 
 @Composable
 fun UrlContextMenu(

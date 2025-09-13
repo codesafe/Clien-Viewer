@@ -24,14 +24,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onNavigateToPreview: () -> Unit
 ) {
-    var currentTheme by remember { mutableStateOf(ColorThemeManager.currentTheme.value) }
+    val currentTheme by ColorThemeManager.currentTheme.collectAsState()
     var showResetDialog by remember { mutableStateOf(false) }
-    
-    LaunchedEffect(Unit) {
-        ColorThemeManager.currentTheme.collect { theme ->
-            currentTheme = theme
-        }
-    }
     
     if (showResetDialog) {
         AlertDialog(

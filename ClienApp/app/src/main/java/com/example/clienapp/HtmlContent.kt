@@ -27,6 +27,8 @@ import coil.request.ImageRequest
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import android.os.Build
+import com.example.clienapp.YouTubePreview
+import com.example.clienapp.VideoPlayer
 
 @Composable
 fun HtmlContent(
@@ -264,10 +266,22 @@ fun RenderNode(
                         VideoPlayer(videoUrl = fullVideoUrl)
                         Spacer(modifier = Modifier.height(8.dp))
                     } else {
-                        // 일반 링크는 내부 콘텐츠만 렌더링
-                        node.childNodes().forEach { childNode ->
-                            RenderNode(childNode, fontSize, lineHeight, onImageClick)
-                        }
+                        // 일반 링크
+                        val linkText = node.text()
+                        val context = LocalContext.current
+                        Text(
+                            text = linkText,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = fontSize.sp,
+                                lineHeight = lineHeight.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                            ),
+                            modifier = Modifier.clickable {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(href))
+                                context.startActivity(intent)
+                            }
+                        )
                     }
                 }
                 else -> {
